@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI Form Filler Demo</title>
+    <style>
+      :root {
+        --bg: #f7f3ea;
+        --panel: #fffdf8;
+        --ink: #1e293b;
+        --muted: #5b6472;
+        --line: #d7cfbe;
+        --accent: #0f766e;
+        --accent-soft: #d9f3ef;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: Georgia, "Times New Roman", serif;
+        color: var(--ink);
+        background:
+          radial-gradient(circle at top left, rgba(15, 118, 110, 0.18), transparent 30%),
+          linear-gradient(180deg, #fbf8f1 0%, var(--bg) 100%);
+      }
+
+      .page {
+        max-width: 960px;
+        margin: 0 auto;
+        padding: 40px 20px 64px;
+      }
+
+      .hero {
+        margin-bottom: 28px;
+        padding: 28px;
+        border: 1px solid var(--line);
+        border-radius: 20px;
+        background: rgba(255, 253, 248, 0.92);
+        box-shadow: 0 16px 48px rgba(30, 41, 59, 0.08);
+      }
+
+      .eyebrow {
+        margin: 0 0 10px;
+        color: var(--accent);
+        font-size: 0.9rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      h1 {
+        margin: 0 0 10px;
+        font-size: clamp(2rem, 4vw, 3.4rem);
+        line-height: 1;
+      }
+
+      .hero p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 1.05rem;
+        max-width: 60ch;
+      }
+
+      form {
+        display: grid;
+        gap: 18px;
+        padding: 28px;
+        border: 1px solid var(--line);
+        border-radius: 20px;
+        background: var(--panel);
+        box-shadow: 0 16px 48px rgba(30, 41, 59, 0.08);
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 18px;
+      }
+
+      .field {
+        display: grid;
+        gap: 8px;
+      }
+
+      label {
+        font-weight: 700;
+        font-size: 0.97rem;
+      }
+
+      input,
+      textarea,
+      select {
+        width: 100%;
+        padding: 12px 14px;
+        border: 1px solid #b9c1cb;
+        border-radius: 12px;
+        background: white;
+        font: inherit;
+        color: var(--ink);
+      }
+
+      input:focus,
+      textarea:focus,
+      select:focus {
+        outline: 2px solid rgba(15, 118, 110, 0.25);
+        border-color: var(--accent);
+      }
+
+      textarea {
+        min-height: 120px;
+        resize: vertical;
+      }
+
+      .checkbox-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding-top: 8px;
+      }
+
+      .checkbox-row input {
+        width: auto;
+      }
+
+      button {
+        border: 0;
+        border-radius: 999px;
+        padding: 14px 22px;
+        font: inherit;
+        font-weight: 700;
+        color: white;
+        background: var(--accent);
+        cursor: pointer;
+      }
+
+      .result {
+        display: none;
+        margin-top: 24px;
+        padding: 22px;
+        border: 1px solid var(--line);
+        border-radius: 20px;
+        background: var(--accent-soft);
+      }
+
+      .result.visible {
+        display: block;
+      }
+
+      .result h2 {
+        margin-top: 0;
+      }
+
+      .result pre {
+        overflow: auto;
+        white-space: pre-wrap;
+        word-break: break-word;
+        margin: 0;
+        font-family: "Courier New", monospace;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <section class="hero">
+        <p class="eyebrow">Local Demo Form</p>
+        <h1>AI-Assisted Form Filling Test Bench</h1>
+        <p>
+          This page is intentionally long and label-rich so the Playwright + LLM
+          workflow can test label extraction, value mapping, autofill, human review,
+          and final submission.
+        </p>
+      </section>
+
+      <form id="demo-form">
+        <div class="grid">
+          <div class="field">
+            <label for="fullName">Full Name</label>
+            <input id="fullName" name="fullName" type="text" placeholder="Enter your full name" />
+          </div>
+
+          <div class="field">
+            <label for="workEmail">Work Email Address</label>
+            <input id="workEmail" name="email" type="email" placeholder="name@company.com" />
+          </div>
+
+          <div class="field">
+            <label for="mobile">Mobile Number</label>
+            <input id="mobile" name="phone" type="tel" placeholder="+91 98765 43210" />
+          </div>
+
+          <div class="field">
+            <label for="companyName">Company / Organization</label>
+            <input id="companyName" name="company" type="text" />
+          </div>
+
+          <div class="field">
+            <label for="jobTitle">Current Role / Job Title</label>
+            <input id="jobTitle" name="jobTitle" type="text" />
+          </div>
+
+          <div class="field">
+            <label for="streetAddress">Street Address</label>
+            <input id="streetAddress" name="address" type="text" />
+          </div>
+
+          <div class="field">
+            <label for="cityTown">City / Town</label>
+            <input id="cityTown" name="city" type="text" />
+          </div>
+
+          <div class="field">
+            <label for="stateProvince">State / Province</label>
+            <input id="stateProvince" name="state" type="text" />
+          </div>
+
+          <div class="field">
+            <label for="postalCode">ZIP / Postal Code</label>
+            <input id="postalCode" name="postalCode" type="text" />
+          </div>
+
+          <div class="field">
+            <label for="countrySelect">Country</label>
+            <select id="countrySelect" name="country">
+              <option value="">Select a country</option>
+              <option value="Australia">Australia</option>
+              <option value="Canada">Canada</option>
+              <option value="Germany">Germany</option>
+              <option value="India">India</option>
+              <option value="Japan">Japan</option>
+              <option value="United States">United States</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="linkedinProfile">LinkedIn Profile</label>
+            <input id="linkedinProfile" name="linkedin" type="url" placeholder="https://linkedin.com/in/you" />
+          </div>
+
+          <div class="field">
+            <label for="personalWebsite">Portfolio Website</label>
+            <input id="personalWebsite" name="website" type="url" placeholder="https://your-site.com" />
+          </div>
+
+          <div class="field">
+            <label for="contactMethod">Preferred Contact Method</label>
+            <select id="contactMethod" name="contactMethod">
+              <option value="">Choose one</option>
+              <option value="Email">Email</option>
+              <option value="Phone">Phone</option>
+              <option value="WhatsApp">WhatsApp</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="aboutYou">Additional Notes / About You</label>
+          <textarea id="aboutYou" name="notes" placeholder="Tell us a little more"></textarea>
+        </div>
+
+        <div class="checkbox-row">
+          <input id="agreeTerms" name="terms" type="checkbox" />
+          <label for="agreeTerms">I agree to the terms and privacy policy</label>
+        </div>
+
+        <div>
+          <button type="submit">Submit Application</button>
+        </div>
+      </form>
+
+      <section id="result" class="result" aria-live="polite">
+        <h2>Submitted Payload</h2>
+        <pre id="resultData"></pre>
+      </section>
+    </main>
+
+    <script>
+      const form = document.getElementById("demo-form");
+      const result = document.getElementById("result");
+      const resultData = document.getElementById("resultData");
+
+      form.addEventListener("submit", (event) => {
+        event.preventDefault();
+
+        const data = new FormData(form);
+        const payload = {};
+
+        for (const [key, value] of data.entries()) {
+          payload[key] = value;
+        }
+
+        if (!data.has("terms")) {
+          payload.terms = false;
+        }
+
+        resultData.textContent = JSON.stringify(payload, null, 2);
+        result.classList.add("visible");
+        result.scrollIntoView({ behavior: "smooth" });
+      });
+    </script>
+  </body>
+</html>

@@ -1,0 +1,17 @@
+{
+  "name": "Aarav Mehta",
+  "email": "aarav.mehta@example.com",
+  "phone": "+91 9876543210",
+  "company": "Nimbus Automation",
+  "jobTitle": "Product Engineer",
+  "address": "17 Residency Lane",
+  "city": "Pune",
+  "state": "Maharashtra",
+  "postalCode": "411001",
+  "country": "India",
+  "linkedin": "https://www.linkedin.com/in/aaravmehta",
+  "website": "https://aaravmehta.dev",
+  "preferredContactMethod": "Email",
+  "notes": "Interested in testing AI-powered browser automation flows.",
+  "acceptTerms": "yes"
+}
