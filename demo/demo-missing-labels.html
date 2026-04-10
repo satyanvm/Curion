@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Demo Missing Labels</title>
+    <style>
+      body {
+        margin: 0;
+        font-family: Georgia, "Times New Roman", serif;
+        background: #f5f1e8;
+        color: #1f2937;
+      }
+
+      .wrap {
+        max-width: 820px;
+        margin: 0 auto;
+        padding: 36px 20px 56px;
+      }
+
+      .panel {
+        padding: 24px;
+        border: 1px solid #d7cfbe;
+        border-radius: 18px;
+        background: #fffdf8;
+        box-shadow: 0 12px 32px rgba(31, 41, 55, 0.08);
+      }
+
+      h1 {
+        margin-top: 0;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 16px;
+      }
+
+      .field {
+        display: grid;
+        gap: 8px;
+      }
+
+      input,
+      textarea,
+      select,
+      button {
+        font: inherit;
+      }
+
+      input,
+      textarea,
+      select {
+        width: 100%;
+        padding: 12px 14px;
+        border: 1px solid #c4cad2;
+        border-radius: 12px;
+        background: #fff;
+      }
+
+      textarea {
+        min-height: 110px;
+      }
+
+      .result {
+        display: none;
+        margin-top: 20px;
+        padding: 18px;
+        border-radius: 16px;
+        background: #d8efe9;
+      }
+
+      .result.visible {
+        display: block;
+      }
+
+      button {
+        margin-top: 14px;
+        padding: 12px 18px;
+        border: 0;
+        border-radius: 999px;
+        background: #0f766e;
+        color: #fff;
+        font-weight: 700;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="wrap">
+      <section class="panel">
+        <h1>Missing Labels Demo</h1>
+        <p>
+          This form intentionally omits visible labels so extraction must rely on
+          placeholder, <code>aria-label</code>, <code>aria-labelledby</code>, and
+          name attributes.
+        </p>
+
+        <form id="demo-form">
+          <div class="grid">
+            <div class="field">
+              <input id="personName" name="candidate_name" type="text" placeholder="Applicant full name" />
+            </div>
+
+            <div class="field">
+              <input id="replyToEmail" name="reply_to" type="email" placeholder="Best email for follow-up" />
+            </div>
+
+            <div class="field">
+              <input id="cellPhone" name="contact_cell" type="tel" aria-label="Cell Phone" />
+            </div>
+
+            <div class="field">
+              <span id="rolePrompt">Current Role</span>
+              <input id="currentRole" name="position_now" type="text" aria-labelledby="rolePrompt" />
+            </div>
+
+            <div class="field">
+              <input id="employer" name="org_name" type="text" placeholder="Organization" />
+            </div>
+
+            <div class="field">
+              <input id="streetLine" name="residence_line_1" type="text" placeholder="Street address" />
+            </div>
+
+            <div class="field">
+              <input id="cityField" name="locality" type="text" placeholder="Town / City" />
+            </div>
+
+            <div class="field">
+              <input id="regionField" name="province_code" type="text" aria-label="State or Province" />
+            </div>
+
+            <div class="field">
+              <input id="zipField" name="postcode_value" type="text" placeholder="Postal code" />
+            </div>
+
+            <div class="field">
+              <select id="residenceCountry" name="geo_region" aria-label="Nation of Residence">
+                <option value="">Choose nation</option>
+                <option value="Australia">Australia</option>
+                <option value="Canada">Canada</option>
+                <option value="India">India</option>
+                <option value="Japan">Japan</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <input id="linkedinUrl" name="social_profile" type="url" aria-label="LinkedIn URL" />
+            </div>
+
+            <div class="field">
+              <input id="portfolioUrl" name="personal_site" type="url" placeholder="Portfolio website" />
+            </div>
+
+            <div class="field">
+              <select id="reachPref" name="reachPreference" aria-label="How should we reach you?">
+                <option value="">Pick a channel</option>
+                <option value="Email">Email</option>
+                <option value="Phone">Phone</option>
+                <option value="WhatsApp">WhatsApp</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="field" style="margin-top: 16px;">
+            <textarea id="commentsBox" name="freeform" placeholder="Additional notes"></textarea>
+          </div>
+
+          <div style="margin-top: 12px;">
+            <input id="consentTick" name="consent" type="checkbox" aria-label="Agree to privacy terms" />
+          </div>
+
+          <button type="submit">Submit Application</button>
+        </form>
+
+        <section id="result" class="result" aria-live="polite">
+          <pre id="resultData"></pre>
+        </section>
+      </section>
+    </main>
+
+    <script>
+      const form = document.getElementById("demo-form");
+      const result = document.getElementById("result");
+      const resultData = document.getElementById("resultData");
+
+      form.addEventListener("submit", (event) => {
+        event.preventDefault();
+        const data = new FormData(form);
+        const payload = {};
+        for (const [key, value] of data.entries()) payload[key] = value;
+        if (!data.has("consent")) payload.consent = false;
+        resultData.textContent = JSON.stringify(payload, null, 2);
+        result.classList.add("visible");
+      });
+    </script>
+  </body>
+</html>

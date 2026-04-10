@@ -2,6 +2,7 @@ export type FieldType =
   | "text"
   | "email"
   | "tel"
+  | "url"
   | "number"
   | "password"
   | "textarea"

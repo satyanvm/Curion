@@ -11,6 +11,45 @@ async function resolveLocator(page: Page, field: FormField): Promise<Locator> {
   throw new Error(`Unable to resolve locator for field "${field.label}"`);
 }
 
+async function ensureValuePersisted(
+  page: Page,
+  field: FormField,
+  locator: Locator,
+  expectedValue: string
+): Promise<void> {
+  if (field.type === "select" || field.type === "checkbox" || field.type === "radio") {
+    return;
+  }
+
+  const currentValue = await locator.inputValue().catch(() => "");
+  if (currentValue === expectedValue) {
+    return;
+  }
+
+  const selectorLocator = page.locator(field.selector).first();
+  if ((await selectorLocator.count()) > 0) {
+    await selectorLocator.fill(expectedValue);
+    const selectorValue = await selectorLocator.inputValue().catch(() => "");
+    if (selectorValue === expectedValue) {
+      return;
+    }
+  }
+
+  // Final fallback: set the DOM value directly and trigger events so the demo
+  // still behaves like a user edit when Playwright's fill does not stick.
+  await locator.evaluate((element, value) => {
+    if (
+      element instanceof HTMLInputElement ||
+      element instanceof HTMLTextAreaElement ||
+      element instanceof HTMLSelectElement
+    ) {
+      element.value = value;
+      element.dispatchEvent(new Event("input", { bubbles: true }));
+      element.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+  }, expectedValue);
+}
+
 export async function fillForm(
   page: Page,
   fields: FormField[],
@@ -35,6 +74,7 @@ export async function fillForm(
       }
     } else {
       await locator.fill(value);
+      await ensureValuePersisted(page, field, locator, value);
     }
 
     filledEntries.push({ label: field.label, value });

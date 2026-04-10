@@ -18,8 +18,17 @@ async function waitForReview(): Promise<void> {
 }
 
 function resolveTarget(inputUrl?: string): string {
-  if (!inputUrl || inputUrl === "demo") {
-    const demoPath = path.resolve(process.cwd(), "demo", "demo-form.html");
+  const demoTargets: Record<string, string> = {
+    demo: "demo-form.html",
+    "demo-all": "demo-form.html",
+    "demo-missing-labels": "demo-missing-labels.html",
+    "demo-attributes": "demo-attributes.html",
+    "demo-dropdowns": "demo-dropdowns.html",
+  };
+
+  if (!inputUrl || inputUrl in demoTargets) {
+    const demoFile = demoTargets[inputUrl ?? "demo"];
+    const demoPath = path.resolve(process.cwd(), "demo", demoFile);
     return pathToFileURL(demoPath).toString();
   }
 

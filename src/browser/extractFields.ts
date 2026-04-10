@@ -21,6 +21,7 @@ function normalizeFieldType(type: string, tagName: string): FieldType {
   if (normalizedType === "radio") return "radio";
   if (normalizedType === "email") return "email";
   if (normalizedType === "tel") return "tel";
+  if (normalizedType === "url") return "url";
   if (normalizedType === "number") return "number";
   if (normalizedType === "password") return "password";
   if (normalizedType === "text" || normalizedType === "") return "text";

@@ -14,17 +14,17 @@ function ruleBasedMap(fields: FormField[], userProfile: UserProfile): FieldValue
 
     if (!haystack) continue;
 
-    if (/(e mail|email|mail)/.test(semanticHint) || field.type === "email") {
+    if (/(e mail|email|mail|follow up|reply to|contact email)/.test(semanticHint) || field.type === "email") {
       values[field.label] = userProfile.email;
       continue;
     }
 
-    if (/(phone|mobile|telephone|tel|contact number)/.test(semanticHint) || field.type === "tel") {
+    if (/(phone|mobile|telephone|tel|contact number|cell|whatsapp number)/.test(semanticHint) || field.type === "tel") {
       values[field.label] = userProfile.phone;
       continue;
     }
 
-    if (/(full name|your name|person name|applicant name)/.test(semanticHint)) {
+    if (/(full name|your name|person name|applicant name|applicant|candidate name|legal name)/.test(semanticHint)) {
       values[field.label] = userProfile.name;
       continue;
     }
@@ -59,7 +59,7 @@ function ruleBasedMap(fields: FormField[], userProfile: UserProfile): FieldValue
       continue;
     }
 
-    if (/(country|nation)/.test(semanticHint)) {
+    if (/(country|nation|residence|residency|citizenship)/.test(semanticHint)) {
       values[field.label] = userProfile.country;
       continue;
     }
@@ -74,7 +74,7 @@ function ruleBasedMap(fields: FormField[], userProfile: UserProfile): FieldValue
       continue;
     }
 
-    if (/(preferred contact|best way to reach|contact method)/.test(semanticHint)) {
+    if (/(preferred contact|best way to reach|contact method|reach you|contact channel|preferred channel)/.test(semanticHint)) {
       values[field.label] = userProfile.preferredContactMethod;
       continue;
     }
@@ -113,11 +113,12 @@ export async function mapFields(
   userProfile: UserProfile
 ): Promise<FieldValueMap> {
   const apiKey = process.env.OPENAI_API_KEY;
+  const fallbackValues = ruleBasedMap(fields, userProfile);
 
   // Keep the MVP self-contained: use rules by default and only try the API if
   // the key exists and native fetch is available in the current runtime.
   if (!apiKey || typeof fetch !== "function") {
-    return ruleBasedMap(fields, userProfile);
+    return fallbackValues;
   }
 
   try {
@@ -158,9 +159,12 @@ export async function mapFields(
     }
 
     const parsed = JSON.parse(content) as FieldValueMap;
-    return parsed;
+    return {
+      ...fallbackValues,
+      ...parsed,
+    };
   } catch (error) {
     console.warn("Falling back to rule-based mapping:", error);
-    return ruleBasedMap(fields, userProfile);
+    return fallbackValues;
   }
 }
