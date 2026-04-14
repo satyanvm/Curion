@@ -1,5 +1,6 @@
 import { FieldValueMap, FormField, UserProfile } from "../types/types";
 import { generateJsonWithGemini, isGeminiConfigured } from "./gemini";
+import { semanticMatchFields } from "../semantic/semanticMatch";
 
 function normalize(text: string): string {
   return text.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
@@ -127,7 +128,12 @@ export async function mapFields(
   fields: FormField[],
   userProfile: UserProfile
 ): Promise<FieldValueMap> {
-  const fallbackValues = ruleBasedMap(fields, userProfile);
+  const ruleValues = ruleBasedMap(fields, userProfile);
+  const semanticValues = semanticMatchFields(fields, userProfile, ruleValues);
+  const fallbackValues = {
+    ...ruleValues,
+    ...semanticValues,
+  };
   const ambiguousFields = getAmbiguousFields(fields, fallbackValues);
 
   // Keep the MVP self-contained: use rules by default and only try the API if
