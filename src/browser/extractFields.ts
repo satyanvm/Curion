@@ -1,8 +1,9 @@
 import { Page } from "playwright";
-import { FieldType, FormField } from "../types/types";
+import { FieldType, FormField, LabelSource } from "../types/types";
 
 type RawField = {
   label: string;
+  labelSource: LabelSource;
   selector: string;
   type: string;
   name?: string;
@@ -76,9 +77,11 @@ export async function extractFields(page: Page): Promise<FormField[]> {
       return parts.join(" > ");
     };
 
-    const readLabel = (element: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement): string => {
+    const readLabel = (
+      element: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
+    ): { label: string; labelSource: LabelSource } => {
       const ariaLabel = element.getAttribute("aria-label")?.trim();
-      if (ariaLabel) return ariaLabel;
+      if (ariaLabel) return { label: ariaLabel, labelSource: "aria-label" };
 
       const ariaLabelledBy = element.getAttribute("aria-labelledby");
       if (ariaLabelledBy) {
@@ -87,7 +90,7 @@ export async function extractFields(page: Page): Promise<FormField[]> {
           .map((id) => document.getElementById(id)?.textContent?.trim() ?? "")
           .join(" ")
           .trim();
-        if (labelText) return labelText;
+        if (labelText) return { label: labelText, labelSource: "aria-labelledby" };
       }
 
       if (element.labels?.length) {
@@ -95,23 +98,23 @@ export async function extractFields(page: Page): Promise<FormField[]> {
           .map((label) => label.textContent?.trim() ?? "")
           .join(" ")
           .trim();
-        if (text) return text;
+        if (text) return { label: text, labelSource: "label" };
       }
 
       const parentLabel = element.closest("label");
       const parentLabelText = parentLabel?.textContent?.trim();
-      if (parentLabelText) return parentLabelText;
+      if (parentLabelText) return { label: parentLabelText, labelSource: "parent-label" };
 
       const placeholder = element.getAttribute("placeholder")?.trim();
-      if (placeholder) return placeholder;
+      if (placeholder) return { label: placeholder, labelSource: "placeholder" };
 
       const name = element.getAttribute("name")?.trim();
-      if (name) return name;
+      if (name) return { label: name, labelSource: "name" };
 
       const id = element.getAttribute("id")?.trim();
-      if (id) return id;
+      if (id) return { label: id, labelSource: "id" };
 
-      return "";
+      return { label: "", labelSource: "id" };
     };
 
     const visibleFields = elements.filter((element) => {
@@ -122,6 +125,7 @@ export async function extractFields(page: Page): Promise<FormField[]> {
     });
 
     return visibleFields.map((element) => {
+      const labelResult = readLabel(element);
       const tagName = element.tagName.toLowerCase();
       const type = element.getAttribute("type") || tagName;
       const options =
@@ -132,7 +136,8 @@ export async function extractFields(page: Page): Promise<FormField[]> {
           : undefined;
 
       return {
-        label: readLabel(element),
+        label: labelResult.label,
+        labelSource: labelResult.labelSource,
         selector: makeSelector(element),
         type,
         name: element.getAttribute("name") ?? undefined,
@@ -150,6 +155,7 @@ export async function extractFields(page: Page): Promise<FormField[]> {
 
     const field: FormField = {
       label: rawField.label,
+      labelSource: rawField.labelSource,
       selector: rawField.selector,
       type: normalizeFieldType(rawField.type, rawField.tagName),
       name: rawField.name,

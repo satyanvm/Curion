@@ -11,10 +11,21 @@ export type FieldType =
   | "radio"
   | "unknown";
 
+export type LabelSource =
+  | "aria-label"
+  | "aria-labelledby"
+  | "label"
+  | "parent-label"
+  | "placeholder"
+  | "name"
+  | "id"
+  | "llm";
+
 export interface FormField {
   label: string;
   selector: string;
   type: FieldType;
+  labelSource: LabelSource;
   name?: string;
   placeholder?: string;
   tagName: string;

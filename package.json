@@ -7,6 +7,7 @@
     "demo": "ts-node src/index.ts demo"
   },
   "dependencies": {
+    "dotenv": "^16.5.0",
     "playwright": "^1.54.2"
   },
   "devDependencies": {

@@ -1,9 +1,10 @@
+import "dotenv/config";
 import readline from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+import { extractFormFields } from "./browser/extractFormFields";
 import { fillForm } from "./browser/fillForm";
-import { extractFields } from "./browser/extractFields";
 import { openPage } from "./browser/openPage";
 import { loadUserProfile, resolveProfilePath } from "./config/userProfile";
 import { mapFields } from "./llm/mapFields";
@@ -53,11 +54,13 @@ async function main(): Promise<void> {
     console.log(`Opening: ${url}`);
     console.log(`Using profile: ${resolvedProfilePath}`);
 
-    const fields = await extractFields(page);
+    const { fields, extractionSource } = await extractFormFields(page);
+    console.log(`Field extraction source: ${extractionSource}`);
     console.log("Detected fields:");
     console.table(
       fields.map((field) => ({
         label: field.label,
+        labelSource: field.labelSource,
         type: field.type,
         selector: field.selector,
       }))

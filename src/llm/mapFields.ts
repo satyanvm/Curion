@@ -1,4 +1,5 @@
 import { FieldValueMap, FormField, UserProfile } from "../types/types";
+import { generateJsonWithGemini, isGeminiConfigured } from "./gemini";
 
 function normalize(text: string): string {
   return text.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
@@ -108,55 +109,38 @@ function ruleBasedMap(fields: FormField[], userProfile: UserProfile): FieldValue
   return values;
 }
 
+function getAmbiguousFields(fields: FormField[], mappedValues: FieldValueMap): FormField[] {
+  return fields.filter((field) => {
+    if (mappedValues[field.label]) {
+      return false;
+    }
+
+    if (field.type === "checkbox" || field.type === "radio") {
+      return false;
+    }
+
+    return true;
+  });
+}
+
 export async function mapFields(
   fields: FormField[],
   userProfile: UserProfile
 ): Promise<FieldValueMap> {
-  const apiKey = process.env.OPENAI_API_KEY;
   const fallbackValues = ruleBasedMap(fields, userProfile);
+  const ambiguousFields = getAmbiguousFields(fields, fallbackValues);
 
   // Keep the MVP self-contained: use rules by default and only try the API if
   // the key exists and native fetch is available in the current runtime.
-  if (!apiKey || typeof fetch !== "function") {
+  if (!isGeminiConfigured() || ambiguousFields.length === 0) {
     return fallbackValues;
   }
 
   try {
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: "gpt-4o-mini",
-        temperature: 0,
-        response_format: { type: "json_object" },
-        messages: [
-          {
-            role: "system",
-            content:
-              "You map form field labels to the best matching user profile value. Return strict JSON where each key is the exact field label and each value is the chosen text value. Only map fields when there is a clear fit.",
-          },
-          {
-            role: "user",
-            content: JSON.stringify({ fields, userProfile }),
-          },
-        ],
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`OpenAI request failed with status ${response.status}`);
-    }
-
-    const json = (await response.json()) as {
-      choices?: Array<{ message?: { content?: string } }>;
-    };
-    const content = json.choices?.[0]?.message?.content;
-    if (!content) {
-      throw new Error("OpenAI response was empty");
-    }
+    const content = await generateJsonWithGemini(
+      "You map ambiguous form field labels to the best matching user profile value. Return strict JSON where each key is the exact field label and each value is the chosen text value. Only map fields when there is a clear fit.",
+      { fields: ambiguousFields, userProfile }
+    );
 
     const parsed = JSON.parse(content) as FieldValueMap;
     return {
