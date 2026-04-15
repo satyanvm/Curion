@@ -51,3 +51,49 @@ export interface UserProfile {
 }
 
 export type FieldValueMap = Record<string, string>;
+
+export type MappingMethod = "rule" | "semantic" | "llm" | "unmapped";
+
+export interface ExtractionFieldConfidence {
+  selector: string;
+  label: string;
+  score: number;
+  reasons: string[];
+  weaknesses: string[];
+  recommendedAction: "trust" | "repair-with-llm" | "review";
+}
+
+export interface  ExtractionConfidenceReport {
+  overallScore: number;
+  shouldUseLLM: boolean;
+  reasons: string[];
+  fieldReports: ExtractionFieldConfidence[];
+  weakFieldRatio: number;
+}
+
+export interface MappingCandidateScore {
+  key: keyof UserProfile;
+  score: number;
+}
+
+export interface FieldMappingConfidence {
+  label: string;
+  selector: string;
+  score: number;
+  extractionScore: number;
+  method: MappingMethod;
+  mappedKey?: keyof UserProfile;
+  mappedValue?: string;
+  reasons: string[];
+  weaknesses: string[];
+  candidateScores: MappingCandidateScore[];
+  shouldUseLLM: boolean;
+}
+
+export interface MappingConfidenceReport {
+  overallScore: number;
+  shouldUseLLM: boolean;
+  reasons: string[];
+  fieldReports: FieldMappingConfidence[];
+  unresolvedCount: number;
+}

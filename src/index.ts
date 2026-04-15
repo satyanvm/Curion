@@ -7,7 +7,7 @@ import { extractFormFields } from "./browser/extractFormFields";
 import { fillForm } from "./browser/fillForm";
 import { openPage } from "./browser/openPage";
 import { loadUserProfile, resolveProfilePath } from "./config/userProfile";
-import { mapFields } from "./llm/mapFields";
+import { mapFieldsWithConfidence } from "./llm/mapFields";
 
 async function waitForReview(): Promise<void> {
   const rl = readline.createInterface({ input, output });
@@ -54,8 +54,9 @@ async function main(): Promise<void> {
     console.log(`Opening: ${url}`);
     console.log(`Using profile: ${resolvedProfilePath}`);
 
-    const { fields, extractionSource } = await extractFormFields(page);
+    const { fields, extractionSource, report: extractionReport } = await extractFormFields(page);
     console.log(`Field extraction source: ${extractionSource}`);
+    console.log(`Extraction confidence: ${extractionReport.overallScore.toFixed(2)}`);
     console.log("Detected fields:");
     console.table(
       fields.map((field) => ({
@@ -66,7 +67,12 @@ async function main(): Promise<void> {
       }))
     );
 
-    const mappedValues = await mapFields(fields, profile);
+    const { mappedValues, report: mappingReport } = await mapFieldsWithConfidence(
+      fields,
+      profile,
+      extractionReport
+    );
+    console.log(`Mapping confidence: ${mappingReport.overallScore.toFixed(2)}`);
     console.log("Mapped values:");
     console.table(mappedValues);
 
