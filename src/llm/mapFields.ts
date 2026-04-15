@@ -1,13 +1,29 @@
-import { FieldValueMap, FormField, UserProfile } from "../types/types";
+import {
+  ExtractionConfidenceReport,
+  FieldValueMap,
+  FormField,
+  MappingCandidateScore,
+  MappingConfidenceReport,
+  UserProfile,
+} from "../types/types";
+import { buildMappingConfidenceReport, MappingDecisionInput } from "../confidence/mappingConfidence";
 import { generateJsonWithGemini, isGeminiConfigured } from "./gemini";
-import { semanticMatchFields } from "../semantic/semanticMatch";
+import { semanticMatchFieldsDetailed } from "../semantic/semanticMatch";
 
 function normalize(text: string): string {
   return text.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 }
 
-function ruleBasedMap(fields: FormField[], userProfile: UserProfile): FieldValueMap {
-  const values: FieldValueMap = {};
+type RuleFieldDecision = {
+  mappedKey: keyof UserProfile;
+  mappedValue: string;
+  score: number;
+  reasons: string[];
+  weaknesses: string[];
+};
+
+function ruleBasedMap(fields: FormField[], userProfile: UserProfile): Map<string, RuleFieldDecision> {
+  const values = new Map<string, RuleFieldDecision>();
 
   for (const field of fields) {
     const semanticHint = normalize([field.label, field.name ?? ""].join(" "));
@@ -16,93 +32,108 @@ function ruleBasedMap(fields: FormField[], userProfile: UserProfile): FieldValue
 
     if (!haystack) continue;
 
+    const assign = (
+      mappedKey: keyof UserProfile,
+      score: number,
+      reasons: string[],
+      weaknesses: string[] = []
+    ): void => {
+      values.set(field.label, {
+        mappedKey,
+        mappedValue: userProfile[mappedKey],
+        score,
+        reasons,
+        weaknesses,
+      });
+    };
+
     if (/(e mail|email|mail|follow up|reply to|contact email)/.test(semanticHint) || field.type === "email") {
-      values[field.label] = userProfile.email;
+      assign("email", 0.96, ["Rule matched email semantics or email field type"]);
       continue;
     }
 
     if (/(phone|mobile|telephone|tel|contact number|cell|whatsapp number)/.test(semanticHint) || field.type === "tel") {
-      values[field.label] = userProfile.phone;
+      assign("phone", 0.96, ["Rule matched phone semantics or tel field type"]);
       continue;
     }
 
     if (/(full name|your name|person name|applicant name|applicant|candidate name|legal name)/.test(semanticHint)) {
-      values[field.label] = userProfile.name;
+      assign("name", 0.93, ["Rule matched name semantics"]);
       continue;
     }
 
     if (/(job title|role|designation|position)/.test(semanticHint)) {
-      values[field.label] = userProfile.jobTitle;
+      assign("jobTitle", 0.93, ["Rule matched job-title semantics"]);
       continue;
     }
 
     if (/(company|organization|organisation|employer)/.test(semanticHint)) {
-      values[field.label] = userProfile.company;
+      assign("company", 0.93, ["Rule matched company semantics"]);
       continue;
     }
 
     if (/(street address|address line|address)/.test(semanticHint)) {
-      values[field.label] = userProfile.address;
+      assign("address", 0.9, ["Rule matched address semantics"]);
       continue;
     }
 
     if (/(city|town)/.test(semanticHint)) {
-      values[field.label] = userProfile.city;
+      assign("city", 0.9, ["Rule matched city semantics"]);
       continue;
     }
 
     if (/(state|province|region)/.test(semanticHint)) {
-      values[field.label] = userProfile.state;
+      assign("state", 0.9, ["Rule matched state/province semantics"]);
       continue;
     }
 
     if (/(zip|postal code|postcode|pin code)/.test(semanticHint)) {
-      values[field.label] = userProfile.postalCode;
+      assign("postalCode", 0.92, ["Rule matched postal-code semantics"]);
       continue;
     }
 
     if (/(country|nation|residence|residency|citizenship)/.test(semanticHint)) {
-      values[field.label] = userProfile.country;
+      assign("country", 0.92, ["Rule matched country/residence semantics"]);
       continue;
     }
 
     if (/(linkedin)/.test(semanticHint)) {
-      values[field.label] = userProfile.linkedin;
+      assign("linkedin", 0.95, ["Rule matched LinkedIn semantics"]);
       continue;
     }
 
     if (/(website|portfolio|homepage|site url)/.test(semanticHint)) {
-      values[field.label] = userProfile.website;
+      assign("website", 0.92, ["Rule matched website/portfolio semantics"]);
       continue;
     }
 
     if (/(preferred contact|best way to reach|contact method|reach you|contact channel|preferred channel)/.test(semanticHint)) {
-      values[field.label] = userProfile.preferredContactMethod;
+      assign("preferredContactMethod", 0.91, ["Rule matched preferred-contact semantics"]);
       continue;
     }
 
     if (/(notes|message|comments|additional info|about you)/.test(semanticHint)) {
-      values[field.label] = userProfile.notes;
+      assign("notes", 0.88, ["Rule matched notes/message semantics"]);
       continue;
     }
 
     if (/(terms|privacy|agree|consent)/.test(semanticHint)) {
-      values[field.label] = userProfile.acceptTerms;
+      assign("acceptTerms", 0.9, ["Rule matched consent semantics"]);
       continue;
     }
 
     if (field.type === "select" && field.options?.length) {
       const lowerOptions = field.options.map((option) => option.toLowerCase());
       if (lowerOptions.includes(userProfile.name.toLowerCase())) {
-        values[field.label] = userProfile.name;
+        assign("name", 0.84, ["Dropdown options contain the profile name"], ["Select-option-only match"]);
         continue;
       }
       if (lowerOptions.includes(userProfile.country.toLowerCase())) {
-        values[field.label] = userProfile.country;
+        assign("country", 0.88, ["Dropdown options contain the profile country"]);
         continue;
       }
       if (lowerOptions.includes(userProfile.preferredContactMethod.toLowerCase())) {
-        values[field.label] = userProfile.preferredContactMethod;
+        assign("preferredContactMethod", 0.88, ["Dropdown options contain the preferred contact method"]);
       }
     }
   }
@@ -110,36 +141,88 @@ function ruleBasedMap(fields: FormField[], userProfile: UserProfile): FieldValue
   return values;
 }
 
-function getAmbiguousFields(fields: FormField[], mappedValues: FieldValueMap): FormField[] {
+function getAmbiguousFields(
+  fields: FormField[],
+  mappingReport: MappingConfidenceReport
+): FormField[] {
   return fields.filter((field) => {
-    if (mappedValues[field.label]) {
-      return false;
-    }
-
     if (field.type === "checkbox" || field.type === "radio") {
       return false;
     }
 
-    return true;
+    const report = mappingReport.fieldReports.find((fieldReport) => fieldReport.label === field.label);
+    return report?.shouldUseLLM ?? true;
   });
+}
+
+function toCandidateScores(mappedKey: keyof UserProfile, score: number): MappingCandidateScore[] {
+  return [{ key: mappedKey, score }];
+}
+
+export interface MapFieldsResult {
+  mappedValues: FieldValueMap;
+  report: MappingConfidenceReport;
 }
 
 export async function mapFields(
   fields: FormField[],
-  userProfile: UserProfile
+  userProfile: UserProfile,
+  extractionReport?: ExtractionConfidenceReport
 ): Promise<FieldValueMap> {
+  const result = await mapFieldsWithConfidence(fields, userProfile, extractionReport);
+  return result.mappedValues;
+}
+
+export async function mapFieldsWithConfidence(
+  fields: FormField[],
+  userProfile: UserProfile,
+  extractionReport?: ExtractionConfidenceReport
+): Promise<MapFieldsResult> {
+  const decisions = new Map<string, MappingDecisionInput>();
+  const mappedValues: FieldValueMap = {};
+
   const ruleValues = ruleBasedMap(fields, userProfile);
-  const semanticValues = semanticMatchFields(fields, userProfile, ruleValues);
-  const fallbackValues = {
-    ...ruleValues,
-    ...semanticValues,
-  };
-  const ambiguousFields = getAmbiguousFields(fields, fallbackValues);
+  for (const [label, decision] of ruleValues.entries()) {
+    mappedValues[label] = decision.mappedValue;
+    decisions.set(label, {
+      label,
+      selector: fields.find((field) => field.label === label)?.selector ?? "",
+      method: "rule",
+      mappedKey: decision.mappedKey,
+      mappedValue: decision.mappedValue,
+      baseScore: decision.score,
+      candidateScores: toCandidateScores(decision.mappedKey, decision.score),
+      reasons: decision.reasons,
+      weaknesses: decision.weaknesses,
+    });
+  }
+
+  const semanticValues = semanticMatchFieldsDetailed(fields, userProfile, mappedValues);
+  for (const [label, decision] of semanticValues.entries()) {
+    mappedValues[label] = decision.mappedValue;
+    decisions.set(label, {
+      label,
+      selector: fields.find((field) => field.label === label)?.selector ?? "",
+      method: "semantic",
+      mappedKey: decision.mappedKey,
+      mappedValue: decision.mappedValue,
+      baseScore: decision.score,
+      candidateScores: decision.candidateScores,
+      reasons: decision.reasons,
+      weaknesses: decision.weaknesses,
+    });
+  }
+
+  let fallbackReport = buildMappingConfidenceReport(fields, decisions, extractionReport);
+  const ambiguousFields = getAmbiguousFields(fields, fallbackReport);
 
   // Keep the MVP self-contained: use rules by default and only try the API if
   // the key exists and native fetch is available in the current runtime.
   if (!isGeminiConfigured() || ambiguousFields.length === 0) {
-    return fallbackValues;
+    return {
+      mappedValues,
+      report: fallbackReport,
+    };
   }
 
   try {
@@ -149,12 +232,40 @@ export async function mapFields(
     );
 
     const parsed = JSON.parse(content) as FieldValueMap;
+    for (const field of ambiguousFields) {
+      const mappedValue = parsed[field.label];
+      if (!mappedValue) continue;
+
+      mappedValues[field.label] = mappedValue;
+      const matchedKey = (Object.keys(userProfile) as Array<keyof UserProfile>).find(
+        (key) => userProfile[key] === mappedValue
+      );
+
+      if (!matchedKey) continue;
+
+      decisions.set(field.label, {
+        label: field.label,
+        selector: field.selector,
+        method: "llm",
+        mappedKey: matchedKey,
+        mappedValue,
+        baseScore: 0.78,
+        candidateScores: toCandidateScores(matchedKey, 0.78),
+        reasons: ["LLM fallback resolved an ambiguous or low-confidence field"],
+        weaknesses: ["LLM fallback should still be reviewed by a human"],
+      });
+    }
+
+    fallbackReport = buildMappingConfidenceReport(fields, decisions, extractionReport);
     return {
-      ...fallbackValues,
-      ...parsed,
+      mappedValues,
+      report: fallbackReport,
     };
   } catch (error) {
     console.warn("Falling back to rule-based mapping:", error);
-    return fallbackValues;
+    return {
+      mappedValues,
+      report: fallbackReport,
+    };
   }
 }

@@ -1,4 +1,4 @@
-import { FieldValueMap, FormField, UserProfile } from "../types/types";
+import { FieldValueMap, FormField, MappingCandidateScore, UserProfile } from "../types/types";
 
 type ProfileKey = keyof UserProfile;
 
@@ -11,6 +11,15 @@ type CandidateProfileField = {
 type SemanticScore = {
   key: ProfileKey;
   score: number;
+};
+
+export type SemanticFieldDecision = {
+  mappedKey: ProfileKey;
+  mappedValue: string;
+  score: number;
+  candidateScores: MappingCandidateScore[];
+  reasons: string[];
+  weaknesses: string[];
 };
 
 const PROFILE_ALIASES: Record<ProfileKey, string[]> = {
@@ -165,12 +174,12 @@ function scoreCandidate(field: FormField, candidate: CandidateProfileField): Sem
   };
 }
 
-export function semanticMatchFields(
+export function semanticMatchFieldsDetailed(
   fields: FormField[],
   userProfile: UserProfile,
   existingValues: FieldValueMap
-): FieldValueMap {
-  const semanticValues: FieldValueMap = {};
+): Map<string, SemanticFieldDecision> {
+  const semanticValues = new Map<string, SemanticFieldDecision>();
   const candidates = buildProfileCandidates(userProfile);
 
   for (const field of fields) {
@@ -196,13 +205,43 @@ export function semanticMatchFields(
     const confidenceGap = runnerUp ? best.score - runnerUp.score : best.score;
     const confidentEnough = best.score >= 0.82;
     const separatedEnough = confidenceGap >= 0.12;
+    const candidateScores = ranked.slice(0, 3).map((candidate) => ({
+      key: candidate.key,
+      score: Math.max(0, Math.min(1, candidate.score)),
+    }));
+
+    const reasons = [
+      `Top semantic candidate is ${best.key}`,
+      `Semantic score ${best.score.toFixed(2)} with confidence gap ${confidenceGap.toFixed(2)}`,
+    ];
+    const weaknesses: string[] = [];
 
     if (!confidentEnough || !separatedEnough) {
+      if (!confidentEnough) weaknesses.push("Top semantic score is below threshold");
+      if (!separatedEnough) weaknesses.push("Runner-up candidate is too close");
       continue;
     }
 
-    semanticValues[field.label] = userProfile[best.key];
+    semanticValues.set(field.label, {
+      mappedKey: best.key,
+      mappedValue: userProfile[best.key],
+      score: Math.max(0, Math.min(1, best.score)),
+      candidateScores,
+      reasons,
+      weaknesses,
+    });
   }
 
   return semanticValues;
+}
+
+export function semanticMatchFields(
+  fields: FormField[],
+  userProfile: UserProfile,
+  existingValues: FieldValueMap
+): FieldValueMap {
+  const detailed = semanticMatchFieldsDetailed(fields, userProfile, existingValues);
+  return Object.fromEntries(
+    Array.from(detailed.entries()).map(([label, decision]) => [label, decision.mappedValue])
+  );
 }

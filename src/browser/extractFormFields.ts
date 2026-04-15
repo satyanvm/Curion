@@ -1,23 +1,13 @@
 import { Page } from "playwright";
 import { extractFields } from "./extractFields";
+import { calculateExtractionConfidence } from "../confidence/extractionConfidence";
 import { extractFieldsWithLLM } from "../llm/extractFieldsWithLLM";
-import { FormField } from "../types/types";
+import { ExtractionConfidenceReport, FormField } from "../types/types";
 
 export interface ExtractedFieldSet {
   fields: FormField[];
   extractionSource: "dom" | "dom+llm";
-}
-
-function shouldFallbackToLLM(fields: FormField[]): boolean {
-  if (fields.length === 0) {
-    return true;
-  }
-
-  const weakLabels = fields.filter((field) =>
-    ["placeholder", "name", "id"].includes(field.labelSource)
-  ).length;
-
-  return weakLabels / fields.length >= 0.5;
+  report: ExtractionConfidenceReport;
 }
 
 function mergeFields(primary: FormField[], secondary: FormField[]): FormField[] {
@@ -38,11 +28,13 @@ function mergeFields(primary: FormField[], secondary: FormField[]): FormField[] 
 
 export async function extractFormFields(page: Page): Promise<ExtractedFieldSet> {
   const domFields = await extractFields(page);
+  const domReport = calculateExtractionConfidence(domFields);
 
-  if (!shouldFallbackToLLM(domFields)) {
+  if (!domReport.shouldUseLLM) {
     return {
       fields: domFields,
       extractionSource: "dom",
+      report: domReport,
     };
   }
 
@@ -51,11 +43,16 @@ export async function extractFormFields(page: Page): Promise<ExtractedFieldSet> 
     return {
       fields: domFields,
       extractionSource: "dom",
+      report: domReport,
     };
   }
 
+  const mergedFields = mergeFields(domFields, llmFields);
+  const mergedReport = calculateExtractionConfidence(mergedFields);
+
   return {
-    fields: mergeFields(domFields, llmFields),
+    fields: mergedFields,
     extractionSource: "dom+llm",
+    report: mergedReport,
   };
 }
