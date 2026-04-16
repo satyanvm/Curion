@@ -27,10 +27,22 @@ function clamp(value: number): number {
 function getExtractionScore(
   field: FormField,
   extractionReport?: ExtractionConfidenceReport
-): number {
-  return (
-    extractionReport?.fieldReports.find((report) => report.selector === field.selector)?.score ?? 0.75
+): { score: number; missing: boolean } {
+  const matchedReport = extractionReport?.fieldReports.find(
+    (report) => report.selector === field.selector
   );
+
+  if (!matchedReport) {
+    return {
+      score: 0,
+      missing: true,
+    };
+  }
+
+  return {
+    score: matchedReport.score,
+    missing: false,
+  };
 }
 
 export function buildMappingConfidenceReport(
@@ -39,10 +51,16 @@ export function buildMappingConfidenceReport(
   extractionReport?: ExtractionConfidenceReport
 ): MappingConfidenceReport {
   const fieldReports: FieldMappingConfidence[] = fields.map((field) => {
-    const extractionScore = getExtractionScore(field, extractionReport);
+    const extractionResult = getExtractionScore(field, extractionReport);
+    const extractionScore = extractionResult.score;
     const decision = decisions.get(field.label);
 
     if (!decision) {
+      const weaknesses = ["No confident deterministic mapping was found"];
+      if (extractionResult.missing) {
+        weaknesses.push("Missing extraction confidence report");
+      }
+
       return {
         label: field.label,
         selector: field.selector,
@@ -50,14 +68,18 @@ export function buildMappingConfidenceReport(
         extractionScore,
         method: "unmapped",
         reasons: [],
-        weaknesses: ["No confident deterministic mapping was found"],
+        weaknesses,
         candidateScores: [],
         shouldUseLLM: true,
       };
     }
 
     const score = clamp(decision.baseScore * 0.72 + extractionScore * 0.28);
-    const shouldUseLLM = score < 0.75;
+    const weaknesses = [...decision.weaknesses];
+    if (extractionResult.missing) {
+      weaknesses.push("Missing extraction confidence report");
+    }
+    const shouldUseLLM = score < 0.75 || extractionResult.missing;
 
     return {
       label: field.label,
@@ -68,7 +90,7 @@ export function buildMappingConfidenceReport(
       mappedKey: decision.mappedKey,
       mappedValue: decision.mappedValue,
       reasons: decision.reasons,
-      weaknesses: decision.weaknesses,
+      weaknesses,
       candidateScores: decision.candidateScores,
       shouldUseLLM,
     };
