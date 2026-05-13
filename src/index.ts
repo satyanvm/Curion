@@ -54,9 +54,17 @@ async function main(): Promise<void> {
     console.log(`Opening: ${url}`);
     console.log(`Using profile: ${resolvedProfilePath}`);
 
-    const { fields, extractionSource, report: extractionReport } = await extractFormFields(page);
+    const {
+      fields,
+      extractionSource,
+      report: extractionReport,
+      htmlAdequacyReport,
+    } = await extractFormFields(page);
     console.log(`Field extraction source: ${extractionSource}`);
     console.log(`Extraction confidence: ${extractionReport.overallScore.toFixed(2)}`);
+    console.log(
+      `HTML adequacy: ${htmlAdequacyReport.overallScore.toFixed(2)} (${htmlAdequacyReport.recommendedFallback})`
+    );
     console.log("Detected fields:");
     console.table(
       fields.map((field) => ({

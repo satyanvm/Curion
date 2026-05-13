@@ -71,6 +71,25 @@ export interface  ExtractionConfidenceReport {
   weakFieldRatio: number;
 }
 
+export type ExtractionFallbackRecommendation =
+  | "none"
+  | "dom-repair"
+  | "llm-html"
+  | "vision";
+
+export interface HtmlAdequacyReport {
+  overallScore: number;
+  recommendedFallback: ExtractionFallbackRecommendation;
+  reasons: string[];
+  weaknesses: string[];
+  nativeControlCount: number;
+  strongSemanticCoverage: number;
+  readableAttributeCoverage: number;
+  machineGeneratedAttributeRatio: number;
+  customWidgetSuspicion: number;
+  hasMeaningfulVisibleText: boolean;
+}
+
 export interface MappingCandidateScore {
   key: keyof UserProfile;
   score: number;
