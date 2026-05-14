@@ -1,0 +1,18 @@
+const observer = new IntersectionObserver(
+  (entries) => {
+    entries.forEach((entry) => {
+      if (entry.isIntersecting) {
+        entry.target.classList.add("is-visible");
+        observer.unobserve(entry.target);
+      }
+    });
+  },
+  { threshold: 0.14 }
+);
+
+document
+  .querySelectorAll(".feature-row, .process-track article, .autofill-preview")
+  .forEach((element) => {
+    element.classList.add("reveal-on-scroll");
+    observer.observe(element);
+  });
