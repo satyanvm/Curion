@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Curion is a browser extension that fills forms using context you have already saved."
+    />
+    <title>Curion | AI Form Filling Extension</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="site-header" aria-label="Primary navigation">
+      <a class="brand" href="#top" aria-label="Curion home">
+        <span class="brand-mark" aria-hidden="true">C</span>
+        <span>Curion</span>
+      </a>
+      <nav class="nav-links" aria-label="Page sections">
+        <a href="#features">Features</a>
+        <a href="#how-it-works">How it works</a>
+        <a href="#preview">Preview</a>
+      </nav>
+    </header>
+
+    <main id="top">
+      <section class="hero section-shell">
+        <div class="hero-copy">
+          <p class="eyebrow">Browser extension for precise autofill</p>
+          <h1>Curion</h1>
+          <p class="hero-tagline">
+            Curion fills forms for you using the context you have already saved,
+            so every repetitive field becomes one click closer to done.
+          </p>
+          <div class="hero-actions" aria-label="Primary actions">
+            <a class="button button-primary" href="#download">Download Extension</a>
+            <a class="button button-secondary" href="#preview">View Demo</a>
+          </div>
+        </div>
+
+        <div class="hero-visual" aria-label="Curion extension filling a form preview">
+          <div class="browser-frame">
+            <div class="browser-bar" aria-hidden="true">
+              <span></span>
+              <span></span>
+              <span></span>
+              <div class="address">forms.example/apply</div>
+            </div>
+            <div class="browser-content">
+              <form class="mock-form" aria-label="Example application form">
+                <div class="form-head">
+                  <span>Application details</span>
+                  <span class="status-pill">Curion active</span>
+                </div>
+                <label>
+                  Full name
+                  <span class="filled-field">Satya Narayan Verma</span>
+                </label>
+                <label>
+                  Email
+                  <span class="filled-field">satya@example.com</span>
+                </label>
+                <label>
+                  Company
+                  <span class="filled-field muted-fill">Waiting for confirmation</span>
+                </label>
+                <label>
+                  Address
+                  <span class="filled-field">Saved home address</span>
+                </label>
+              </form>
+
+              <aside class="extension-panel" aria-label="Curion extension panel">
+                <div class="panel-title">
+                  <span>Curion</span>
+                  <span class="signal-dot" aria-hidden="true"></span>
+                </div>
+                <div class="context-block">
+                  <p>Saved context</p>
+                  <span>Name, email, address, work profile</span>
+                </div>
+                <div class="field-list" aria-label="Autofill status">
+                  <span><strong>4</strong> fields detected</span>
+                  <span><strong>3</strong> ready to fill</span>
+                  <span><strong>1</strong> needs review</span>
+                </div>
+                <button class="mini-button" type="button">Fill verified fields</button>
+              </aside>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="feature-band" id="features" aria-labelledby="features-title">
+        <div class="section-shell split-heading">
+          <div>
+            <p class="eyebrow">Built for repeat forms</p>
+            <h2 id="features-title">Fast autofill without giving up control.</h2>
+          </div>
+          <p>
+            Curion keeps the workflow compact: detect fields, map saved context,
+            fill what is confident, and leave uncertain details visible for review.
+          </p>
+        </div>
+
+        <div class="section-shell feature-grid">
+          <article class="feature-row">
+            <span class="feature-index">01</span>
+            <div>
+              <h3>Automatic form filling</h3>
+              <p>Common fields are completed from your stored profile with a single action.</p>
+            </div>
+          </article>
+          <article class="feature-row">
+            <span class="feature-index">02</span>
+            <div>
+              <h3>Context-aware autofill</h3>
+              <p>Labels, placeholders, and page structure guide how each answer is chosen.</p>
+            </div>
+          </article>
+          <article class="feature-row">
+            <span class="feature-index">03</span>
+            <div>
+              <h3>Time saving</h3>
+              <p>Repetitive applications, onboarding forms, and profiles move faster.</p>
+            </div>
+          </article>
+          <article class="feature-row">
+            <span class="feature-index">04</span>
+            <div>
+              <h3>Secure local data usage</h3>
+              <p>Your saved context stays explicit, reviewable, and easy to update.</p>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="section-shell process-section" id="how-it-works" aria-labelledby="process-title">
+        <p class="eyebrow">How it works</p>
+        <h2 id="process-title">A direct extension workflow.</h2>
+        <div class="process-track">
+          <article>
+            <span>1</span>
+            <h3>Save your data once</h3>
+            <p>Add the reusable details you want Curion to reference across forms.</p>
+          </article>
+          <article>
+            <span>2</span>
+            <h3>AI detects forms</h3>
+            <p>Curion reads field labels, inputs, and layout signals from the current page.</p>
+          </article>
+          <article>
+            <span>3</span>
+            <h3>Automatically fills intelligently</h3>
+            <p>Confident fields are filled, while uncertain matches stay available for review.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="preview-band" id="preview" aria-labelledby="preview-title">
+        <div class="section-shell preview-layout">
+          <div class="preview-copy">
+            <p class="eyebrow">Extension preview</p>
+            <h2 id="preview-title">Saved context applied where the form actually needs it.</h2>
+            <p>
+              The extension panel stays narrow and practical. It shows source context,
+              match confidence, and the exact fields Curion is ready to complete.
+            </p>
+          </div>
+
+          <div class="autofill-preview" aria-label="Detailed Curion autofill mockup">
+            <div class="preview-toolbar">
+              <span>Checkout profile</span>
+              <span>Review mode</span>
+            </div>
+            <div class="preview-grid">
+              <div class="context-card">
+                <h3>Saved user context</h3>
+                <dl>
+                  <div>
+                    <dt>Name</dt>
+                    <dd>Satya Narayan Verma</dd>
+                  </div>
+                  <div>
+                    <dt>Email</dt>
+                    <dd>satya@example.com</dd>
+                  </div>
+                  <div>
+                    <dt>Role</dt>
+                    <dd>Automation engineer</dd>
+                  </div>
+                  <div>
+                    <dt>Address</dt>
+                    <dd>Primary saved address</dd>
+                  </div>
+                </dl>
+              </div>
+              <div class="detected-card">
+                <h3>Detected form fields</h3>
+                <div class="detected-row is-complete">
+                  <span>Full name</span>
+                  <strong>Filled</strong>
+                </div>
+                <div class="detected-row is-complete">
+                  <span>Email address</span>
+                  <strong>Filled</strong>
+                </div>
+                <div class="detected-row is-review">
+                  <span>Company</span>
+                  <strong>Review</strong>
+                </div>
+                <div class="detected-row is-complete">
+                  <span>Mailing address</span>
+                  <strong>Filled</strong>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section-shell download-section" id="download" aria-labelledby="download-title">
+        <div>
+          <p class="eyebrow">Start with the extension</p>
+          <h2 id="download-title">Install Curion where forms already happen.</h2>
+        </div>
+        <a class="button button-primary" href="#" aria-label="Download Curion browser extension">
+          Download Extension
+        </a>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>Made with love by Satya Narayan Verma</p>
+      <div class="social-links" aria-label="Social links">
+        <a href="https://twitter.com/" target="_blank" rel="noreferrer">Twitter</a>
+        <a href="https://www.linkedin.com/" target="_blank" rel="noreferrer">LinkedIn</a>
+      </div>
+    </footer>
+
+    <script src="./script.js"></script>
+  </body>
+</html>
