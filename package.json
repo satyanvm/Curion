@@ -4,7 +4,9 @@
   "private": true,
   "scripts": {
     "start": "ts-node src/index.ts",
-    "demo": "ts-node src/index.ts demo"
+    "demo": "ts-node src/index.ts demo",
+    "demo:crm": "ts-node src/index.ts crm data/crm-profile.json",
+    "test:crm": "ts-node src/scenarios/runCrmScenario.ts"
   },
   "dependencies": {
     "dotenv": "^16.5.0",

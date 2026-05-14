@@ -52,22 +52,32 @@ function ruleBasedMap(fields: FormField[], userProfile: UserProfile): Map<string
       continue;
     }
 
-    if (/(phone|mobile|telephone|tel|contact number|cell|whatsapp number)/.test(semanticHint) || field.type === "tel") {
+    if (/(phone|mobile|telephone|tel|contact number|cell|whatsapp number|direct phone)/.test(semanticHint) || field.type === "tel") {
       assign("phone", 0.96, ["Rule matched phone semantics or tel field type"]);
       continue;
     }
 
-    if (/(full name|your name|person name|applicant name|applicant|candidate name|legal name)/.test(semanticHint)) {
+    if (/(full name|your name|person name|applicant name|applicant|candidate name|legal name|lead name|contact name|prospect name)/.test(semanticHint)) {
       assign("name", 0.93, ["Rule matched name semantics"]);
       continue;
     }
 
-    if (/(job title|role|designation|position)/.test(semanticHint)) {
+    if (/(job title|role|designation|position|lead title)/.test(semanticHint)) {
       assign("jobTitle", 0.93, ["Rule matched job-title semantics"]);
       continue;
     }
 
-    if (/(company|organization|organisation|employer)/.test(semanticHint)) {
+    if (/(linkedin)/.test(semanticHint)) {
+      assign("linkedin", 0.95, ["Rule matched LinkedIn semantics"]);
+      continue;
+    }
+
+    if (/(website|portfolio|homepage|site url)/.test(semanticHint)) {
+      assign("website", 0.92, ["Rule matched website/portfolio semantics"]);
+      continue;
+    }
+
+    if (/(company|organization|organisation|employer|account company|account name)/.test(semanticHint)) {
       assign("company", 0.93, ["Rule matched company semantics"]);
       continue;
     }
@@ -97,22 +107,12 @@ function ruleBasedMap(fields: FormField[], userProfile: UserProfile): Map<string
       continue;
     }
 
-    if (/(linkedin)/.test(semanticHint)) {
-      assign("linkedin", 0.95, ["Rule matched LinkedIn semantics"]);
-      continue;
-    }
-
-    if (/(website|portfolio|homepage|site url)/.test(semanticHint)) {
-      assign("website", 0.92, ["Rule matched website/portfolio semantics"]);
-      continue;
-    }
-
-    if (/(preferred contact|best way to reach|contact method|reach you|contact channel|preferred channel)/.test(semanticHint)) {
+    if (/(preferred contact|best way to reach|contact method|reach you|contact channel|preferred channel|outreach channel|preferred outreach)/.test(semanticHint)) {
       assign("preferredContactMethod", 0.91, ["Rule matched preferred-contact semantics"]);
       continue;
     }
 
-    if (/(notes|message|comments|additional info|about you)/.test(semanticHint)) {
+    if (/(notes|message|comments|additional info|about you|lead notes)/.test(semanticHint)) {
       assign("notes", 0.88, ["Rule matched notes/message semantics"]);
       continue;
     }
@@ -146,10 +146,6 @@ function getAmbiguousFields(
   mappingReport: MappingConfidenceReport
 ): FormField[] {
   return fields.filter((field) => {
-    if (field.type === "checkbox" || field.type === "radio") {
-      return false;
-    }
-
     const report = mappingReport.fieldReports.find((fieldReport) => fieldReport.label === field.label);
     return report?.shouldUseLLM ?? true;
   });
@@ -167,16 +163,18 @@ export interface MapFieldsResult {
 export async function mapFields(
   fields: FormField[],
   userProfile: UserProfile,
-  extractionReport?: ExtractionConfidenceReport
+  extractionReport?: ExtractionConfidenceReport,
+  formContext?: string
 ): Promise<FieldValueMap> {
-  const result = await mapFieldsWithConfidence(fields, userProfile, extractionReport);
+  const result = await mapFieldsWithConfidence(fields, userProfile, extractionReport, formContext);
   return result.mappedValues;
 }
 
 export async function mapFieldsWithConfidence(
   fields: FormField[],
   userProfile: UserProfile,
-  extractionReport?: ExtractionConfidenceReport
+  extractionReport?: ExtractionConfidenceReport,
+  formContext?: string
 ): Promise<MapFieldsResult> {
   const decisions = new Map<string, MappingDecisionInput>();
   const mappedValues: FieldValueMap = {};
@@ -227,8 +225,14 @@ export async function mapFieldsWithConfidence(
 
   try {
     const content = await generateJsonWithGemini(
-      "You map ambiguous form field labels to the best matching user profile value. Return strict JSON where each key is the exact field label and each value is the chosen text value. Only map fields when there is a clear fit.",
-      { fields: ambiguousFields, userProfile }
+      [
+        "You map ambiguous form field labels to the best matching user profile value.",
+        "Use the form context, labels, names, placeholders, input types, and options to infer likely meaning.",
+        "For CRM lead/contact forms, common aliases include: primary contact=name, account=company, seat/title=jobTitle, base=address, market=city, territory=state, zone=postalCode, geo=country, source/website=website, profile=linkedin, next touch=preferredContactMethod, context=notes, ok/consent=acceptTerms.",
+        "Return strict JSON where each key is the exact field label and each value is the chosen text value.",
+        "Only map fields when there is a clear fit.",
+      ].join(" "),
+      { fields: ambiguousFields, allFields: fields, alreadyMappedValues: mappedValues, userProfile, formContext }
     );
 
     const parsed = JSON.parse(content) as FieldValueMap;
