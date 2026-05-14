@@ -25,6 +25,7 @@ function resolveTarget(inputUrl?: string): string {
     "demo-missing-labels": "demo-missing-labels.html",
     "demo-attributes": "demo-attributes.html",
     "demo-dropdowns": "demo-dropdowns.html",
+    crm: "crm.html",
   };
 
   if (!inputUrl || inputUrl in demoTargets) {
@@ -45,6 +46,7 @@ async function main(): Promise<void> {
   const rawTarget = process.argv[2];
   const rawProfilePath = process.argv[3];
   const url = resolveTarget(rawTarget);
+  const formContext = rawTarget === "crm" ? "CRM lead intake form" : undefined;
   const profile = await loadUserProfile(rawProfilePath);
   const resolvedProfilePath = resolveProfilePath(rawProfilePath);
 
@@ -78,7 +80,8 @@ async function main(): Promise<void> {
     const { mappedValues, report: mappingReport } = await mapFieldsWithConfidence(
       fields,
       profile,
-      extractionReport
+      extractionReport,
+      formContext
     );
     console.log(`Mapping confidence: ${mappingReport.overallScore.toFixed(2)}`);
     console.log("Mapped values:");
