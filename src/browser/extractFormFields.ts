@@ -7,9 +7,11 @@ import { ExtractionConfidenceReport, FormField, HtmlAdequacyReport } from "../ty
 
 export interface ExtractedFieldSet {
   fields: FormField[];
-  extractionSource: "dom" | "dom+llm" | "dom-needs-vision";
+  extractionSource: "dom" | "dom+llm" | "dom-needs-vision" | "dom+llm-deferred";
   report: ExtractionConfidenceReport;
   htmlAdequacyReport: HtmlAdequacyReport;
+  /** When true, extraction LLM was skipped so mapping can run one unified LLM call. */
+  deferredLlmExtraction: boolean;
 }
 
 function mergeFields(primary: FormField[], secondary: FormField[]): FormField[] {
@@ -28,6 +30,25 @@ function mergeFields(primary: FormField[], secondary: FormField[]): FormField[] 
   return Array.from(merged.values());
 }
 
+function shouldDeferLlmExtraction(
+  domReport: ExtractionConfidenceReport,
+  htmlAdequacyReport: HtmlAdequacyReport
+): boolean {
+  if (!domReport.shouldUseLLM) {
+    return false;
+  }
+
+  if (htmlAdequacyReport.recommendedFallback === "vision") {
+    return false;
+  }
+
+  if (htmlAdequacyReport.recommendedFallback === "dom-repair") {
+    return false;
+  }
+
+  return htmlAdequacyReport.recommendedFallback === "llm-html";
+}
+
 export async function extractFormFields(page: Page): Promise<ExtractedFieldSet> {
   const domFields = await extractFields(page);
   const domReport = calculateExtractionConfidence(domFields);
@@ -39,6 +60,7 @@ export async function extractFormFields(page: Page): Promise<ExtractedFieldSet> 
       extractionSource: "dom",
       report: domReport,
       htmlAdequacyReport,
+      deferredLlmExtraction: false,
     };
   }
 
@@ -48,6 +70,7 @@ export async function extractFormFields(page: Page): Promise<ExtractedFieldSet> 
       extractionSource: "dom-needs-vision",
       report: domReport,
       htmlAdequacyReport,
+      deferredLlmExtraction: false,
     };
   }
 
@@ -57,6 +80,17 @@ export async function extractFormFields(page: Page): Promise<ExtractedFieldSet> 
       extractionSource: "dom",
       report: domReport,
       htmlAdequacyReport,
+      deferredLlmExtraction: false,
+    };
+  }
+
+  if (shouldDeferLlmExtraction(domReport, htmlAdequacyReport)) {
+    return {
+      fields: domFields,
+      extractionSource: "dom+llm-deferred",
+      report: domReport,
+      htmlAdequacyReport,
+      deferredLlmExtraction: true,
     };
   }
 
@@ -67,6 +101,7 @@ export async function extractFormFields(page: Page): Promise<ExtractedFieldSet> 
       extractionSource: "dom",
       report: domReport,
       htmlAdequacyReport,
+      deferredLlmExtraction: false,
     };
   }
 
@@ -79,5 +114,6 @@ export async function extractFormFields(page: Page): Promise<ExtractedFieldSet> 
     extractionSource: "dom+llm",
     report: mergedReport,
     htmlAdequacyReport: mergedAdequacyReport,
+    deferredLlmExtraction: false,
   };
 }

@@ -57,10 +57,11 @@ async function main(): Promise<void> {
     console.log(`Using profile: ${resolvedProfilePath}`);
 
     const {
-      fields,
+      fields: extractedFields,
       extractionSource,
       report: extractionReport,
       htmlAdequacyReport,
+      deferredLlmExtraction,
     } = await extractFormFields(page);
     console.log(`Field extraction source: ${extractionSource}`);
     console.log(`Extraction confidence: ${extractionReport.overallScore.toFixed(2)}`);
@@ -69,7 +70,7 @@ async function main(): Promise<void> {
     );
     console.log("Detected fields:");
     console.table(
-      fields.map((field) => ({
+      extractedFields.map((field) => ({
         label: field.label,
         labelSource: field.labelSource,
         type: field.type,
@@ -77,12 +78,15 @@ async function main(): Promise<void> {
       }))
     );
 
-    const { mappedValues, report: mappingReport } = await mapFieldsWithConfidence(
+    const {
+      mappedValues,
+      report: mappingReport,
       fields,
-      profile,
-      extractionReport,
-      formContext
-    );
+    } = await mapFieldsWithConfidence(extractedFields, profile, extractionReport, {
+      formContext,
+      page,
+      deferredLlmExtraction,
+    });
     console.log(`Mapping confidence: ${mappingReport.overallScore.toFixed(2)}`);
     console.log("Mapped values:");
     console.table(mappedValues);
