@@ -22,6 +22,24 @@ type RuleFieldDecision = {
   weaknesses: string[];
 };
 
+const PROFILE_SCHEMA: Record<keyof UserProfile, string> = {
+  name: "A person's full name.",
+  email: "An email address.",
+  phone: "A phone or mobile number.",
+  company: "A company, organization, employer, or account name.",
+  jobTitle: "A person's work role, position, designation, or title.",
+  address: "A street or mailing address.",
+  city: "A city, town, locality, or business market location.",
+  state: "A state, province, region, or sales territory.",
+  postalCode: "A postal code, ZIP code, postcode, or delivery zone.",
+  country: "A country, nation, or geographic country-level value.",
+  linkedin: "A LinkedIn profile URL.",
+  website: "A website, homepage, portfolio, or company site URL.",
+  preferredContactMethod: "The preferred contact, outreach, or follow-up channel.",
+  notes: "Freeform notes, comments, message, memo, or contextual details.",
+  acceptTerms: "A consent, agreement, opt-in, privacy, or terms checkbox value.",
+};
+
 function ruleBasedMap(fields: FormField[], userProfile: UserProfile): Map<string, RuleFieldDecision> {
   const values = new Map<string, RuleFieldDecision>();
 
@@ -155,6 +173,38 @@ function toCandidateScores(mappedKey: keyof UserProfile, score: number): Mapping
   return [{ key: mappedKey, score }];
 }
 
+function buildMappedAnchors(decisions: Map<string, MappingDecisionInput>): Array<{
+  label: string;
+  mappedKey: keyof UserProfile;
+  mappedValue: string;
+  method: MappingDecisionInput["method"];
+  score: number;
+}> {
+  return Array.from(decisions.values()).map((decision) => ({
+    label: decision.label,
+    mappedKey: decision.mappedKey,
+    mappedValue: decision.mappedValue,
+    method: decision.method,
+    score: decision.baseScore,
+  }));
+}
+
+function buildAvailableProfileOptions(decisions: Map<string, MappingDecisionInput>, userProfile: UserProfile): Array<{
+  key: keyof UserProfile;
+  description: string;
+  value: string;
+}> {
+  const mappedKeys = new Set(Array.from(decisions.values()).map((decision) => decision.mappedKey));
+
+  return (Object.keys(userProfile) as Array<keyof UserProfile>)
+    .filter((key) => !mappedKeys.has(key))
+    .map((key) => ({
+      key,
+      description: PROFILE_SCHEMA[key],
+      value: userProfile[key],
+    }));
+}
+
 export interface MapFieldsResult {
   mappedValues: FieldValueMap;
   report: MappingConfidenceReport;
@@ -228,11 +278,23 @@ export async function mapFieldsWithConfidence(
       [
         "You map ambiguous form field labels to the best matching user profile value.",
         "Use the form context, labels, names, placeholders, input types, and options to infer likely meaning.",
-        "For CRM lead/contact forms, common aliases include: primary contact=name, account=company, seat/title=jobTitle, base=address, market=city, territory=state, zone=postalCode, geo=country, source/website=website, profile=linkedin, next touch=preferredContactMethod, context=notes, ok/consent=acceptTerms.",
+        "Use already mapped fields as anchors for the overall pattern of the form.",
+        "Use the profile schema descriptions to understand what each available profile value represents.",
+        "Prefer unused profile values when they clearly fit an unmapped field, and avoid duplicating an already mapped profile value unless the form truly asks for the same information twice.",
+        "Consider field order and neighboring fields when labels are short or ambiguous.",
         "Return strict JSON where each key is the exact field label and each value is the chosen text value.",
         "Only map fields when there is a clear fit.",
       ].join(" "),
-      { fields: ambiguousFields, allFields: fields, alreadyMappedValues: mappedValues, userProfile, formContext }
+      {
+        fields: ambiguousFields,
+        allFields: fields,
+        alreadyMappedFields: buildMappedAnchors(decisions),
+        alreadyMappedValues: mappedValues,
+        availableProfileOptions: buildAvailableProfileOptions(decisions, userProfile),
+        profileSchema: PROFILE_SCHEMA,
+        userProfile,
+        formContext,
+      }
     );
 
     const parsed = JSON.parse(content) as FieldValueMap;
