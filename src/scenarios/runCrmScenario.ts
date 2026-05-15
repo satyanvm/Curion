@@ -46,17 +46,21 @@ async function main(): Promise<void> {
     await page.goto(url, { waitUntil: "domcontentloaded" });
 
     const {
-      fields,
+      fields: extractedFields,
       extractionSource,
       report: extractionReport,
       htmlAdequacyReport,
+      deferredLlmExtraction,
     } = await extractFormFields(page);
-    const { mappedValues, report: mappingReport } = await mapFieldsWithConfidence(
+    const {
+      mappedValues,
+      report: mappingReport,
       fields,
-      profile,
-      extractionReport,
-      "CRM lead intake form"
-    );
+    } = await mapFieldsWithConfidence(extractedFields, profile, extractionReport, {
+      formContext: "CRM lead intake form",
+      page,
+      deferredLlmExtraction,
+    });
     const filledEntries = await fillForm(page, fields, mappedValues);
 
     await page.getByRole("button", { name: /submit/i }).click();

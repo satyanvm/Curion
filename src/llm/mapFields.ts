@@ -1,3 +1,4 @@
+import { Page } from "playwright";
 import {
   ExtractionConfidenceReport,
   FieldValueMap,
@@ -8,6 +9,12 @@ import {
 } from "../types/types";
 import { buildMappingConfidenceReport, MappingDecisionInput } from "../confidence/mappingConfidence";
 import { generateJsonWithGemini, isGeminiConfigured } from "./gemini";
+import {
+  PROFILE_SCHEMA,
+  buildAvailableProfileOptions,
+  buildMappedAnchors,
+} from "./mappingContext";
+import { resolveFormWithLLM } from "./resolveFormWithLLM";
 import { semanticMatchFieldsDetailed } from "../semantic/semanticMatch";
 
 function normalize(text: string): string {
@@ -20,24 +27,6 @@ type RuleFieldDecision = {
   score: number;
   reasons: string[];
   weaknesses: string[];
-};
-
-const PROFILE_SCHEMA: Record<keyof UserProfile, string> = {
-  name: "A person's full name.",
-  email: "An email address.",
-  phone: "A phone or mobile number.",
-  company: "A company, organization, employer, or account name.",
-  jobTitle: "A person's work role, position, designation, or title.",
-  address: "A street or mailing address.",
-  city: "A city, town, locality, or business market location.",
-  state: "A state, province, region, or sales territory.",
-  postalCode: "A postal code, ZIP code, postcode, or delivery zone.",
-  country: "A country, nation, or geographic country-level value.",
-  linkedin: "A LinkedIn profile URL.",
-  website: "A website, homepage, portfolio, or company site URL.",
-  preferredContactMethod: "The preferred contact, outreach, or follow-up channel.",
-  notes: "Freeform notes, comments, message, memo, or contextual details.",
-  acceptTerms: "A consent, agreement, opt-in, privacy, or terms checkbox value.",
 };
 
 function ruleBasedMap(fields: FormField[], userProfile: UserProfile): Map<string, RuleFieldDecision> {
@@ -82,6 +71,16 @@ function ruleBasedMap(fields: FormField[], userProfile: UserProfile): Map<string
 
     if (/(job title|role|designation|position|lead title)/.test(semanticHint)) {
       assign("jobTitle", 0.93, ["Rule matched job-title semantics"]);
+      continue;
+    }
+
+    if (semanticHint === "seat" || field.name === "seat") {
+      assign("jobTitle", 0.9, ["Rule matched seat as job title"]);
+      continue;
+    }
+
+    if (semanticHint === "base" || field.name === "base") {
+      assign("address", 0.9, ["Rule matched base as street address"]);
       continue;
     }
 
@@ -173,50 +172,60 @@ function toCandidateScores(mappedKey: keyof UserProfile, score: number): Mapping
   return [{ key: mappedKey, score }];
 }
 
-function buildMappedAnchors(decisions: Map<string, MappingDecisionInput>): Array<{
-  label: string;
-  mappedKey: keyof UserProfile;
-  mappedValue: string;
-  method: MappingDecisionInput["method"];
-  score: number;
-}> {
-  return Array.from(decisions.values()).map((decision) => ({
-    label: decision.label,
-    mappedKey: decision.mappedKey,
-    mappedValue: decision.mappedValue,
-    method: decision.method,
-    score: decision.baseScore,
-  }));
+function applyLlmMappings(
+  ambiguousFields: FormField[],
+  mappings: FieldValueMap,
+  userProfile: UserProfile,
+  mappedValues: FieldValueMap,
+  decisions: Map<string, MappingDecisionInput>
+): void {
+  for (const field of ambiguousFields) {
+    const rawMappedValue = mappings[field.label];
+    if (!rawMappedValue) continue;
+
+    const profileKeys = Object.keys(userProfile) as Array<keyof UserProfile>;
+    const returnedKey = profileKeys.find((key) => key === rawMappedValue);
+    const matchedKey =
+      returnedKey ??
+      profileKeys.find((key) => userProfile[key] === rawMappedValue);
+
+    if (!matchedKey) continue;
+
+    const mappedValue = userProfile[matchedKey];
+    mappedValues[field.label] = mappedValue;
+    decisions.set(field.label, {
+      label: field.label,
+      selector: field.selector,
+      method: "llm",
+      mappedKey: matchedKey,
+      mappedValue,
+      baseScore: 0.78,
+      candidateScores: toCandidateScores(matchedKey, 0.78),
+      reasons: ["LLM resolved an ambiguous or low-confidence field"],
+      weaknesses: ["LLM fallback should still be reviewed by a human"],
+    });
+  }
 }
 
-function buildAvailableProfileOptions(decisions: Map<string, MappingDecisionInput>, userProfile: UserProfile): Array<{
-  key: keyof UserProfile;
-  description: string;
-  value: string;
-}> {
-  const mappedKeys = new Set(Array.from(decisions.values()).map((decision) => decision.mappedKey));
-
-  return (Object.keys(userProfile) as Array<keyof UserProfile>)
-    .filter((key) => !mappedKeys.has(key))
-    .map((key) => ({
-      key,
-      description: PROFILE_SCHEMA[key],
-      value: userProfile[key],
-    }));
-}
+export type MapFieldsOptions = {
+  formContext?: string;
+  page?: Page;
+  deferredLlmExtraction?: boolean;
+};
 
 export interface MapFieldsResult {
   mappedValues: FieldValueMap;
   report: MappingConfidenceReport;
+  fields: FormField[];
 }
 
 export async function mapFields(
   fields: FormField[],
   userProfile: UserProfile,
   extractionReport?: ExtractionConfidenceReport,
-  formContext?: string
+  options?: MapFieldsOptions
 ): Promise<FieldValueMap> {
-  const result = await mapFieldsWithConfidence(fields, userProfile, extractionReport, formContext);
+  const result = await mapFieldsWithConfidence(fields, userProfile, extractionReport, options);
   return result.mappedValues;
 }
 
@@ -224,17 +233,19 @@ export async function mapFieldsWithConfidence(
   fields: FormField[],
   userProfile: UserProfile,
   extractionReport?: ExtractionConfidenceReport,
-  formContext?: string
+  options?: MapFieldsOptions
 ): Promise<MapFieldsResult> {
+  const { formContext, page } = options ?? {};
   const decisions = new Map<string, MappingDecisionInput>();
   const mappedValues: FieldValueMap = {};
+  let workingFields = fields;
 
-  const ruleValues = ruleBasedMap(fields, userProfile);
+  const ruleValues = ruleBasedMap(workingFields, userProfile);
   for (const [label, decision] of ruleValues.entries()) {
     mappedValues[label] = decision.mappedValue;
     decisions.set(label, {
       label,
-      selector: fields.find((field) => field.label === label)?.selector ?? "",
+      selector: workingFields.find((field) => field.label === label)?.selector ?? "",
       method: "rule",
       mappedKey: decision.mappedKey,
       mappedValue: decision.mappedValue,
@@ -245,12 +256,12 @@ export async function mapFieldsWithConfidence(
     });
   }
 
-  const semanticValues = semanticMatchFieldsDetailed(fields, userProfile, mappedValues);
+  const semanticValues = semanticMatchFieldsDetailed(workingFields, userProfile, mappedValues);
   for (const [label, decision] of semanticValues.entries()) {
     mappedValues[label] = decision.mappedValue;
     decisions.set(label, {
       label,
-      selector: fields.find((field) => field.label === label)?.selector ?? "",
+      selector: workingFields.find((field) => field.label === label)?.selector ?? "",
       method: "semantic",
       mappedKey: decision.mappedKey,
       mappedValue: decision.mappedValue,
@@ -261,15 +272,46 @@ export async function mapFieldsWithConfidence(
     });
   }
 
-  let fallbackReport = buildMappingConfidenceReport(fields, decisions, extractionReport);
-  const ambiguousFields = getAmbiguousFields(fields, fallbackReport);
+  let fallbackReport = buildMappingConfidenceReport(workingFields, decisions, extractionReport);
+  const ambiguousFields = getAmbiguousFields(workingFields, fallbackReport);
 
-  // Keep the MVP self-contained: use rules by default and only try the API if
-  // the key exists and native fetch is available in the current runtime.
   if (!isGeminiConfigured() || ambiguousFields.length === 0) {
     return {
       mappedValues,
       report: fallbackReport,
+      fields: workingFields,
+    };
+  }
+
+  if (page) {
+    const unified = await resolveFormWithLLM({
+      page,
+      fields: workingFields,
+      ambiguousFields,
+      userProfile,
+      decisions,
+      mappingReport: fallbackReport,
+      extractionReport,
+      formContext,
+    });
+
+    if (unified) {
+      workingFields = unified.fields;
+      const targets = getAmbiguousFields(workingFields, fallbackReport);
+      applyLlmMappings(targets, unified.mappings, userProfile, mappedValues, decisions);
+
+      fallbackReport = buildMappingConfidenceReport(workingFields, decisions, extractionReport);
+      return {
+        mappedValues,
+        report: fallbackReport,
+        fields: workingFields,
+      };
+    }
+
+    return {
+      mappedValues,
+      report: fallbackReport,
+      fields: workingFields,
     };
   }
 
@@ -287,7 +329,7 @@ export async function mapFieldsWithConfidence(
       ].join(" "),
       {
         fields: ambiguousFields,
-        allFields: fields,
+        allFields: workingFields,
         alreadyMappedFields: buildMappedAnchors(decisions),
         alreadyMappedValues: mappedValues,
         availableProfileOptions: buildAvailableProfileOptions(decisions, userProfile),
@@ -298,40 +340,20 @@ export async function mapFieldsWithConfidence(
     );
 
     const parsed = JSON.parse(content) as FieldValueMap;
-    for (const field of ambiguousFields) {
-      const mappedValue = parsed[field.label];
-      if (!mappedValue) continue;
+    applyLlmMappings(ambiguousFields, parsed, userProfile, mappedValues, decisions);
 
-      mappedValues[field.label] = mappedValue;
-      const matchedKey = (Object.keys(userProfile) as Array<keyof UserProfile>).find(
-        (key) => userProfile[key] === mappedValue
-      );
-
-      if (!matchedKey) continue;
-
-      decisions.set(field.label, {
-        label: field.label,
-        selector: field.selector,
-        method: "llm",
-        mappedKey: matchedKey,
-        mappedValue,
-        baseScore: 0.78,
-        candidateScores: toCandidateScores(matchedKey, 0.78),
-        reasons: ["LLM fallback resolved an ambiguous or low-confidence field"],
-        weaknesses: ["LLM fallback should still be reviewed by a human"],
-      });
-    }
-
-    fallbackReport = buildMappingConfidenceReport(fields, decisions, extractionReport);
+    fallbackReport = buildMappingConfidenceReport(workingFields, decisions, extractionReport);
     return {
       mappedValues,
       report: fallbackReport,
+      fields: workingFields,
     };
   } catch (error) {
     console.warn("Falling back to rule-based mapping:", error);
     return {
       mappedValues,
       report: fallbackReport,
+      fields: workingFields,
     };
   }
 }

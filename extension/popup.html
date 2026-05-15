@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Curion</title>
+    <link rel="stylesheet" href="./popup.css" />
+  </head>
+  <body>
+    <main class="popup-shell">
+      <header class="popup-header">
+        <div class="brand">
+          <span class="brand-mark">C</span>
+          <div>
+            <h1>Curion</h1>
+            <p id="pageStatus">Ready to inspect this page</p>
+          </div>
+        </div>
+        <a class="site-link" href="https://curion.website" target="_blank" rel="noreferrer">Site</a>
+      </header>
+
+      <section class="summary" aria-live="polite">
+        <div>
+          <span id="fieldCount">0</span>
+          <p>fields</p>
+        </div>
+        <div>
+          <span id="mappedCount">0</span>
+          <p>matched</p>
+        </div>
+      </section>
+
+      <section class="actions">
+        <button id="scanButton" type="button">Scan page</button>
+        <button id="fillButton" class="primary" type="button" disabled>Fill matched fields</button>
+      </section>
+
+      <section class="profile-warning" id="profileWarning" hidden>
+        <p>Add profile data before filling forms.</p>
+        <button id="openOptionsButton" type="button">Open profile</button>
+      </section>
+
+      <section class="mapping-list" id="mappingList" aria-label="Detected mappings"></section>
+
+      <footer>
+        <button id="editProfileButton" type="button">Edit profile data</button>
+      </footer>
+    </main>
+    <script src="./popup.js"></script>
+  </body>
+</html>

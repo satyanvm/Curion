@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Curion Profile</title>
+    <link rel="stylesheet" href="./options.css" />
+  </head>
+  <body>
+    <main class="options-shell">
+      <header>
+        <a class="brand" href="https://curion.website" target="_blank" rel="noreferrer">
+          <span class="brand-mark">C</span>
+          <span>Curion</span>
+        </a>
+        <p>Profile data used for filling forms stays in Chrome local extension storage.</p>
+      </header>
+
+      <section class="editor-layout">
+        <form id="profileForm" class="profile-form">
+          <label>Full name<input name="name" autocomplete="name" /></label>
+          <label>Email<input name="email" autocomplete="email" /></label>
+          <label>Phone<input name="phone" autocomplete="tel" /></label>
+          <label>Company<input name="company" autocomplete="organization" /></label>
+          <label>Job title<input name="jobTitle" /></label>
+          <label>Address<input name="address" autocomplete="street-address" /></label>
+          <label>City<input name="city" autocomplete="address-level2" /></label>
+          <label>State<input name="state" autocomplete="address-level1" /></label>
+          <label>Postal code<input name="postalCode" autocomplete="postal-code" /></label>
+          <label>Country<input name="country" autocomplete="country-name" /></label>
+          <label>LinkedIn<input name="linkedin" autocomplete="url" /></label>
+          <label>Website<input name="website" autocomplete="url" /></label>
+          <label>Preferred contact<input name="preferredContactMethod" /></label>
+          <label class="wide">Notes<textarea name="notes" rows="4"></textarea></label>
+          <label>Terms value<input name="acceptTerms" /></label>
+          <div class="form-actions">
+            <button class="primary" type="submit">Save profile</button>
+            <button id="loadSampleButton" type="button">Load sample</button>
+          </div>
+        </form>
+
+        <aside class="json-panel">
+          <div class="panel-head">
+            <h1>Profile JSON</h1>
+            <button id="copyJsonButton" type="button">Copy</button>
+          </div>
+          <textarea id="jsonEditor" spellcheck="false"></textarea>
+          <button id="saveJsonButton" class="primary" type="button">Save JSON</button>
+          <p id="status" aria-live="polite"></p>
+        </aside>
+      </section>
+    </main>
+    <script src="./options.js"></script>
+  </body>
+</html>

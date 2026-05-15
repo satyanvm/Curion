@@ -1,0 +1,21 @@
+{
+  "manifest_version": 3,
+  "name": "Curion",
+  "description": "AI-assisted form filling with reviewable saved profile data.",
+  "version": "0.1.0",
+  "homepage_url": "https://curion.website",
+  "permissions": ["activeTab", "storage"],
+  "host_permissions": ["<all_urls>"],
+  "action": {
+    "default_title": "Curion",
+    "default_popup": "popup.html"
+  },
+  "options_page": "options.html",
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["contentScript.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
