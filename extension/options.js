@@ -16,8 +16,11 @@ const SAMPLE_PROFILE = {
   acceptTerms: "yes"
 };
 
+const DEFAULT_API_URL = "https://backend-three-mu-84.vercel.app/api/agent/map-form";
+
 const form = document.getElementById("profileForm");
 const jsonEditor = document.getElementById("jsonEditor");
+const apiUrlInput = document.getElementById("apiUrlInput");
 const statusElement = document.getElementById("status");
 
 function fields() {
@@ -40,13 +43,17 @@ function render(profile) {
 }
 
 async function saveProfile(profile) {
-  await chrome.storage.local.set({ curionProfile: profile });
+  await chrome.storage.local.set({
+    curionProfile: profile,
+    curionApiUrl: apiUrlInput.value.trim()
+  });
   render(profile);
   setStatus("Profile saved locally.");
 }
 
 async function loadProfile() {
-  const stored = await chrome.storage.local.get(["curionProfile"]);
+  const stored = await chrome.storage.local.get(["curionProfile", "curionApiUrl"]);
+  apiUrlInput.value = stored.curionApiUrl || DEFAULT_API_URL;
   render(stored.curionProfile || SAMPLE_PROFILE);
 }
 

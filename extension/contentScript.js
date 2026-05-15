@@ -145,6 +145,17 @@ function analyze(profile) {
   };
 }
 
+function collectPageSnapshot() {
+  const fields = extractFields();
+  return {
+    url: window.location.href,
+    title: document.title,
+    html: document.documentElement.outerHTML,
+    fields,
+    fieldCount: fields.length
+  };
+}
+
 function setNativeValue(element, value) {
   const prototype = Object.getPrototypeOf(element);
   const descriptor = Object.getOwnPropertyDescriptor(prototype, "value");
@@ -197,6 +208,29 @@ function fillMappedFields(profile) {
   };
 }
 
+function fillReturnedMappings(mappings) {
+  const controls = getControls();
+  let filledCount = 0;
+
+  for (const entry of mappings || []) {
+    const field = entry.field;
+    const mapping = entry.mapping;
+    if (!field || !mapping?.value) continue;
+
+    const control =
+      controls[field.index] ||
+      (field.selector ? document.querySelector(field.selector) : null);
+
+    if (!control) continue;
+    fillControl(control, mapping.value);
+    filledCount += 1;
+  }
+
+  return {
+    filledCount
+  };
+}
+
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message?.type === "CURION_ANALYZE") {
     sendResponse(analyze(message.profile || {}));
@@ -205,6 +239,16 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
   if (message?.type === "CURION_FILL") {
     sendResponse(fillMappedFields(message.profile || {}));
+    return true;
+  }
+
+  if (message?.type === "CURION_COLLECT_PAGE") {
+    sendResponse(collectPageSnapshot());
+    return true;
+  }
+
+  if (message?.type === "CURION_FILL_MAPPINGS") {
+    sendResponse(fillReturnedMappings(message.mappings || []));
     return true;
   }
 

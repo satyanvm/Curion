@@ -26,6 +26,12 @@ Supported fields currently match the core profile shape:
 
 The options page supports both form editing and raw JSON editing so advanced users can paste structured data directly.
 
+The backend API URL is also editable in options. It defaults to:
+
+```text
+https://backend-three-mu-84.vercel.app/api/agent/map-form
+```
+
 ## Local Install
 
 1. Open `chrome://extensions`.
@@ -37,4 +43,4 @@ The options page supports both form editing and raw JSON editing so advanced use
 
 ## Current Behavior
 
-The extension runs local deterministic matching in `contentScript.js`. It does not call Gemini yet. The next step is to connect the popup to the Node agent/backend so the extension can use the full extraction confidence, HTML adequacy, rich LLM repair, mapping confidence, and review workflow.
+The extension collects the active page fields and HTML, calls the Curion backend API, reviews returned mappings in the popup, then fills the approved backend mappings into the current page. If the backend API URL is empty or unavailable, the extension can still use its local deterministic matching fallback.

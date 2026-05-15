@@ -16,8 +16,11 @@ const DEFAULT_PROFILE = {
   acceptTerms: "yes"
 };
 
+const DEFAULT_API_URL = "https://backend-three-mu-84.vercel.app/api/agent/map-form";
+
 const state = {
   profile: null,
+  apiUrl: "",
   analysis: null
 };
 
@@ -41,8 +44,9 @@ async function getActiveTab() {
 }
 
 async function loadProfile() {
-  const stored = await chrome.storage.local.get(["curionProfile"]);
+  const stored = await chrome.storage.local.get(["curionProfile", "curionApiUrl"]);
   state.profile = stored.curionProfile || null;
+  state.apiUrl = stored.curionApiUrl || DEFAULT_API_URL;
   return state.profile;
 }
 
@@ -60,7 +64,11 @@ function renderAnalysis(analysis) {
   elements.fieldCount.textContent = String(analysis?.fieldCount || 0);
   elements.mappedCount.textContent = String(analysis?.mappedCount || 0);
   elements.fillButton.disabled = !analysis || analysis.mappedCount === 0;
-  elements.pageStatus.textContent = analysis?.title ? analysis.title : "Ready to inspect this page";
+  elements.pageStatus.textContent = analysis?.source
+    ? `${analysis.source} mapping · ${Math.round((analysis.overallConfidence || 0) * 100)}%`
+    : analysis?.title
+      ? analysis.title
+      : "Ready to inspect this page";
   elements.mappingList.textContent = "";
 
   for (const entry of analysis?.mappings || []) {
@@ -78,6 +86,14 @@ function renderAnalysis(analysis) {
     row.append(label, value);
     elements.mappingList.append(row);
   }
+}
+
+function normalizeApiAnalysis(apiAnalysis) {
+  return {
+    ...apiAnalysis,
+    title: apiAnalysis.title || "Backend mapping complete",
+    mappings: apiAnalysis.mappings || []
+  };
 }
 
 async function sendToActiveTab(message) {
@@ -98,6 +114,33 @@ async function scanPage() {
   }
 
   elements.pageStatus.textContent = "Scanning current page...";
+
+  if (state.apiUrl) {
+    const pageSnapshot = await sendToActiveTab({
+      type: "CURION_COLLECT_PAGE"
+    });
+    const response = await fetch(state.apiUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        goal: "Fill this page with the saved Curion profile.",
+        ...pageSnapshot,
+        profile: state.profile
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`Backend mapping failed with status ${response.status}`);
+    }
+
+    const analysis = normalizeApiAnalysis(await response.json());
+    state.analysis = analysis;
+    renderAnalysis(analysis);
+    return;
+  }
+
   const analysis = await sendToActiveTab({
     type: "CURION_ANALYZE",
     profile: state.profile
@@ -109,6 +152,16 @@ async function scanPage() {
 async function fillPage() {
   const elements = getElements();
   elements.pageStatus.textContent = "Filling matched fields...";
+
+  if (state.analysis?.source) {
+    const result = await sendToActiveTab({
+      type: "CURION_FILL_MAPPINGS",
+      mappings: state.analysis.mappings || []
+    });
+    elements.pageStatus.textContent = `Filled ${result.filledCount || 0} backend-mapped fields`;
+    return;
+  }
+
   const result = await sendToActiveTab({
     type: "CURION_FILL",
     profile: state.profile
