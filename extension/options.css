@@ -22,7 +22,8 @@ body {
 
 button,
 input,
-textarea {
+textarea,
+select {
   font: inherit;
 }
 
@@ -118,12 +119,14 @@ label {
 }
 
 label.wide,
-.form-actions {
+.form-actions,
+.settings-fieldset {
   grid-column: 1 / -1;
 }
 
 input,
-textarea {
+textarea,
+select {
   width: 100%;
   border: 1px solid var(--line);
   border-radius: 7px;
@@ -137,6 +140,42 @@ input {
   padding: 0 11px;
 }
 
+select {
+  height: 40px;
+  padding: 0 11px;
+}
+
+input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+}
+
+.settings-fieldset {
+  display: grid;
+  gap: 14px;
+  margin: 0;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.settings-fieldset legend {
+  padding: 0 6px;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.check-row {
+  display: flex;
+  grid-template-columns: none;
+  align-items: center;
+  gap: 10px;
+  color: var(--ink);
+}
+
 textarea {
   min-height: 110px;
   padding: 11px;
@@ -144,7 +183,8 @@ textarea {
 }
 
 .form-actions,
-.panel-head {
+.panel-head,
+.json-actions {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -163,10 +203,40 @@ h1 {
 }
 
 #jsonEditor {
-  min-height: 520px;
+  min-height: 320px;
   font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
   font-size: 12px;
   line-height: 1.5;
+}
+
+#workingJsonEditor {
+  min-height: 180px;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.working-head {
+  margin-top: 10px;
+}
+
+.profile-stats {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.import-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--bg);
+  color: var(--ink);
+  cursor: pointer;
 }
 
 @media (max-width: 860px) {

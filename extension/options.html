@@ -18,6 +18,21 @@
 
       <section class="editor-layout">
         <form id="profileForm" class="profile-form">
+          <fieldset class="settings-fieldset">
+            <legend>Extension behavior</legend>
+            <label class="check-row">
+              <input id="autoFillInput" type="checkbox" />
+              Enable Curion scanning and form filling
+            </label>
+            <label>
+              Submission mode
+              <select id="submitModeInput">
+                <option value="review">Ask for review before submit</option>
+                <option value="direct">Directly submit after filling</option>
+              </select>
+            </label>
+          </fieldset>
+
           <label>Full name<input name="name" autocomplete="name" /></label>
           <label>Email<input name="email" autocomplete="email" /></label>
           <label>Phone<input name="phone" autocomplete="tel" /></label>
@@ -40,6 +55,11 @@
           <div class="form-actions">
             <button class="primary" type="submit">Save profile</button>
             <button id="loadSampleButton" type="button">Load sample</button>
+            <button id="exportJsonButton" type="button">Export JSON</button>
+            <label class="import-button">
+              Import JSON
+              <input id="importJsonInput" type="file" accept="application/json,.json" hidden />
+            </label>
           </div>
         </form>
 
@@ -50,6 +70,15 @@
           </div>
           <textarea id="jsonEditor" spellcheck="false"></textarea>
           <button id="saveJsonButton" class="primary" type="button">Save JSON</button>
+          <div class="panel-head working-head">
+            <h1>Current working metadata</h1>
+            <span id="workingStats" class="profile-stats">Inactive</span>
+          </div>
+          <textarea id="workingJsonEditor" spellcheck="false" placeholder='{"lead":{"name":"Jane Doe","email":"jane@example.com"}}'></textarea>
+          <div class="json-actions">
+            <button id="saveWorkingJsonButton" class="primary" type="button">Use working JSON</button>
+            <button id="clearWorkingJsonButton" type="button">Clear working JSON</button>
+          </div>
           <p id="status" aria-live="polite"></p>
         </aside>
       </section>

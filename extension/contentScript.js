@@ -20,6 +20,29 @@ function normalize(text) {
   return String(text || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 }
 
+function labelizeKey(key) {
+  return String(key || "")
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/[_-]+/g, " ");
+}
+
+function metadataEntries(metadata, prefix = "") {
+  if (!metadata || typeof metadata !== "object") return [];
+
+  return Object.entries(metadata).flatMap(([key, value]) => {
+    const path = prefix ? `${prefix}.${key}` : key;
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      return metadataEntries(value, path);
+    }
+    if (value === undefined || value === null || value === "") return [];
+    return [{
+      key: path,
+      label: labelizeKey(path),
+      value: Array.isArray(value) ? value.join(", ") : String(value)
+    }];
+  });
+}
+
 function cssPath(element) {
   if (element.id) {
     return `#${CSS.escape(element.id)}`;
@@ -120,10 +143,24 @@ function profileValueForField(field, profile) {
     }
   }
 
+  if (!bestKey) {
+    for (const entry of metadataEntries(profile)) {
+      const keyScore = normalize(entry.label)
+        .split(" ")
+        .filter((token) => token.length > 1 && haystack.includes(token)).length;
+
+      if (keyScore > bestScore) {
+        bestKey = entry.key;
+        bestScore = keyScore;
+      }
+    }
+  }
+
   if (!bestKey) return null;
+  const value = metadataEntries(profile).find((entry) => entry.key === bestKey)?.value || profile[bestKey];
   return {
     key: bestKey,
-    value: String(profile[bestKey]),
+    value: String(value),
     confidence: Math.min(0.96, 0.62 + bestScore * 0.12)
   };
 }
@@ -143,6 +180,16 @@ function analyze(profile) {
     mappedCount,
     mappings
   };
+}
+
+function hasProfile(profile) {
+  return metadataEntries(profile).length > 0;
+}
+
+function activeProfileFromSettings(settings) {
+  return hasProfile(settings.curionWorkingMetadata)
+    ? settings.curionWorkingMetadata
+    : settings.curionProfile || {};
 }
 
 function collectPageSnapshot() {
@@ -183,6 +230,22 @@ function fillControl(control, value) {
     }
   } else {
     setNativeValue(control, value);
+  }
+
+  control.dispatchEvent(new Event("input", { bubbles: true }));
+  control.dispatchEvent(new Event("change", { bubbles: true }));
+}
+
+function clearControl(control) {
+  const tag = control.tagName.toLowerCase();
+  const type = (control.getAttribute("type") || "").toLowerCase();
+
+  if (type === "checkbox" || type === "radio") {
+    control.checked = false;
+  } else if (tag === "select") {
+    control.selectedIndex = 0;
+  } else {
+    setNativeValue(control, "");
   }
 
   control.dispatchEvent(new Event("input", { bubbles: true }));
@@ -231,6 +294,114 @@ function fillReturnedMappings(mappings) {
   };
 }
 
+function unfillPage() {
+  const controls = getControls();
+  for (const control of controls) {
+    clearControl(control);
+  }
+  return {
+    clearedCount: controls.length,
+    fieldCount: controls.length,
+    title: document.title
+  };
+}
+
+function formScore(form) {
+  return Array.from(form.querySelectorAll("input, textarea, select")).filter((control) => {
+    const type = (control.getAttribute("type") || "").toLowerCase();
+    return !["hidden", "submit", "button", "reset", "file", "image"].includes(type) && !control.disabled;
+  }).length;
+}
+
+function submitBestForm() {
+  const forms = Array.from(document.forms)
+    .map((form) => ({ form, score: formScore(form) }))
+    .filter((entry) => entry.score > 0)
+    .sort((a, b) => b.score - a.score);
+
+  const target = forms[0]?.form || getControls()[0]?.closest("form");
+  if (!target) {
+    return { submitted: false, reason: "No form found" };
+  }
+
+  const submitter = target.querySelector(
+    'button[type="submit"], input[type="submit"], button:not([type])'
+  );
+
+  if (submitter) {
+    submitter.click();
+  } else if (typeof target.requestSubmit === "function") {
+    target.requestSubmit();
+  } else {
+    target.submit();
+  }
+
+  return { submitted: true };
+}
+
+function fillAndMaybeSubmit(profile, submitMode) {
+  const result = fillMappedFields(profile);
+  if (submitMode === "direct" && result.filledCount > 0) {
+    return {
+      ...result,
+      submit: submitBestForm()
+    };
+  }
+  return result;
+}
+
+let autoFillTimer = null;
+let lastAutoFillSignature = "";
+let autoFillPausedForPage = false;
+
+function buildAutoFillSignature(profile) {
+  const controls = getControls();
+  return JSON.stringify({
+    href: window.location.href,
+    fieldCount: controls.length,
+    labels: controls.slice(0, 40).map(labelFor),
+    profileKeys: Object.keys(profile || {}).filter((key) => String(profile[key] || "").trim()).sort()
+  });
+}
+
+async function maybeAutoFill() {
+  if (autoFillPausedForPage) return;
+
+  const stored = await chrome.storage.local.get([
+    "curionAutoFillEnabled",
+    "curionProfile",
+    "curionWorkingMetadata",
+    "curionSubmitMode"
+  ]);
+
+  if (!stored.curionAutoFillEnabled) return;
+  const profile = activeProfileFromSettings(stored);
+  if (!hasProfile(profile) || getControls().length === 0) return;
+
+  const signature = buildAutoFillSignature(profile);
+  if (signature === lastAutoFillSignature) return;
+  lastAutoFillSignature = signature;
+
+  fillAndMaybeSubmit(profile, stored.curionSubmitMode || "review");
+}
+
+function scheduleAutoFill() {
+  window.clearTimeout(autoFillTimer);
+  autoFillTimer = window.setTimeout(() => {
+    maybeAutoFill().catch(() => {
+      // Auto-fill should never break the host page.
+    });
+  }, 700);
+}
+
+scheduleAutoFill();
+
+const observer = new MutationObserver(() => scheduleAutoFill());
+observer.observe(document.documentElement, {
+  childList: true,
+  subtree: true
+});
+
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message?.type === "CURION_ANALYZE") {
     sendResponse(analyze(message.profile || {}));
@@ -238,7 +409,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   }
 
   if (message?.type === "CURION_FILL") {
-    sendResponse(fillMappedFields(message.profile || {}));
+    sendResponse(fillAndMaybeSubmit(message.profile || {}, message.submitMode || "review"));
     return true;
   }
 
@@ -248,7 +419,17 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   }
 
   if (message?.type === "CURION_FILL_MAPPINGS") {
-    sendResponse(fillReturnedMappings(message.mappings || []));
+    const result = fillReturnedMappings(message.mappings || []);
+    if (message.submitMode === "direct" && result.filledCount > 0) {
+      result.submit = submitBestForm();
+    }
+    sendResponse(result);
+    return true;
+  }
+
+  if (message?.type === "CURION_UNFILL") {
+    autoFillPausedForPage = true;
+    sendResponse(unfillPage());
     return true;
   }
 
