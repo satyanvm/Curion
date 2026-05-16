@@ -20,6 +20,11 @@ function normalize(text) {
   return String(text || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 }
 
+function containsAny(text, terms) {
+  const normalized = normalize(text);
+  return terms.some((term) => normalized.split(" ").includes(term));
+}
+
 function labelizeKey(key) {
   return String(key || "")
     .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
@@ -129,6 +134,7 @@ function extractFields() {
 
 function profileValueForField(field, profile) {
   const haystack = normalize([field.label, field.name, field.placeholder].join(" "));
+  const relationalNameTerms = ["mother", "father", "parent", "guardian", "spouse", "wife", "husband"];
   let bestKey = "";
   let bestScore = 0;
 
@@ -145,6 +151,14 @@ function profileValueForField(field, profile) {
 
   if (!bestKey) {
     for (const entry of metadataEntries(profile)) {
+      if (
+        containsAny(haystack, relationalNameTerms) &&
+        normalize(entry.label).split(" ").includes("name") &&
+        !containsAny(entry.label, relationalNameTerms)
+      ) {
+        continue;
+      }
+
       const keyScore = normalize(entry.label)
         .split(" ")
         .filter((token) => token.length > 1 && haystack.includes(token)).length;
@@ -157,6 +171,14 @@ function profileValueForField(field, profile) {
   }
 
   if (!bestKey) return null;
+  if (
+    bestKey === "name" &&
+    containsAny(haystack, relationalNameTerms) &&
+    !containsAny(labelizeKey(bestKey), relationalNameTerms)
+  ) {
+    return null;
+  }
+
   const value = metadataEntries(profile).find((entry) => entry.key === bestKey)?.value || profile[bestKey];
   return {
     key: bestKey,
@@ -353,6 +375,8 @@ function fillAndMaybeSubmit(profile, submitMode) {
 let autoFillTimer = null;
 let lastAutoFillSignature = "";
 let autoFillPausedForPage = false;
+let curionPrompt = null;
+let lastPromptSignature = "";
 
 function buildAutoFillSignature(profile) {
   const controls = getControls();
@@ -362,6 +386,234 @@ function buildAutoFillSignature(profile) {
     labels: controls.slice(0, 40).map(labelFor),
     profileKeys: Object.keys(profile || {}).filter((key) => String(profile[key] || "").trim()).sort()
   });
+}
+
+function promptStyles() {
+  return `
+    #curion-root {
+      position: fixed;
+      right: 18px;
+      bottom: 18px;
+      z-index: 2147483647;
+      width: min(360px, calc(100vw - 32px));
+      border: 1px solid #dedede;
+      border-radius: 10px;
+      background: #ffffff;
+      color: #080808;
+      box-shadow: 0 18px 48px rgba(0, 0, 0, 0.18);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      overflow: hidden;
+    }
+
+    .curion-card {
+      display: grid;
+      gap: 12px;
+      padding: 14px;
+    }
+
+    .curion-head,
+    .curion-actions,
+    .curion-stats {
+      display: flex;
+      align-items: center;
+    }
+
+    .curion-head,
+    .curion-actions {
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .curion-brand {
+      display: flex;
+      align-items: center;
+      min-width: 0;
+      gap: 9px;
+      font-weight: 800;
+      font-size: 14px;
+    }
+
+    .curion-mark {
+      display: grid;
+      width: 28px;
+      height: 28px;
+      flex: 0 0 auto;
+      place-items: center;
+      border-radius: 7px;
+      background: #080808;
+      color: #ffffff;
+      font-weight: 850;
+    }
+
+    .curion-close {
+      width: 30px;
+      min-height: 30px;
+      border: 1px solid #dedede;
+      border-radius: 7px;
+      background: #ffffff;
+      color: #666666;
+      cursor: pointer;
+      font: inherit;
+      font-weight: 800;
+    }
+
+    .curion-message {
+      margin: 0;
+      color: #555555;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .curion-stats {
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .curion-pill {
+      padding: 6px 8px;
+      border: 1px solid #dedede;
+      border-radius: 999px;
+      color: #555555;
+      background: #fafafa;
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    .curion-primary,
+    .curion-secondary {
+      min-height: 36px;
+      padding: 0 12px;
+      border-radius: 7px;
+      cursor: pointer;
+      font: inherit;
+      font-size: 12px;
+      font-weight: 850;
+    }
+
+    .curion-primary {
+      border: 1px solid #080808;
+      background: #080808;
+      color: #ffffff;
+    }
+
+    .curion-primary:disabled {
+      border-color: #dedede;
+      background: #f3f3f3;
+      color: #9a9a9a;
+      cursor: not-allowed;
+    }
+
+    .curion-secondary {
+      border: 1px solid #dedede;
+      background: #ffffff;
+      color: #080808;
+    }
+
+    .curion-unmapped {
+      max-height: 92px;
+      overflow: auto;
+      padding-top: 2px;
+      color: #666666;
+      font-size: 11px;
+      line-height: 1.45;
+    }
+  `;
+}
+
+function removeCurionPrompt() {
+  curionPrompt?.remove();
+  curionPrompt = null;
+}
+
+function unmappedLabels(analysis, limit = 5) {
+  return (analysis.mappings || [])
+    .filter((entry) => !entry.mapping)
+    .map((entry) => entry.field?.label)
+    .filter(Boolean)
+    .slice(0, limit);
+}
+
+function pluralize(count, singular, plural = `${singular}s`) {
+  return count === 1 ? singular : plural;
+}
+
+function renderCurionPrompt(analysis, message) {
+  removeCurionPrompt();
+
+  const root = document.createElement("div");
+  root.id = "curion-root";
+  root.setAttribute("role", "status");
+  root.setAttribute("aria-live", "polite");
+  root.innerHTML = `
+    <style>${promptStyles()}</style>
+    <div class="curion-card">
+      <div class="curion-head">
+        <div class="curion-brand"><span class="curion-mark">C</span><span>Curion found a form</span></div>
+        <button class="curion-close" type="button" aria-label="Dismiss Curion">x</button>
+      </div>
+      <p class="curion-message"></p>
+      <div class="curion-stats">
+        <span class="curion-pill curion-field-count"></span>
+        <span class="curion-pill curion-match-count"></span>
+      </div>
+      <div class="curion-unmapped" hidden></div>
+      <div class="curion-actions">
+        <button class="curion-secondary" type="button">Not now</button>
+        <button class="curion-primary" type="button">Auto-fill</button>
+      </div>
+    </div>
+  `;
+
+  const primary = root.querySelector(".curion-primary");
+  const secondary = root.querySelector(".curion-secondary");
+  const close = root.querySelector(".curion-close");
+  const messageElement = root.querySelector(".curion-message");
+  const fieldsElement = root.querySelector(".curion-field-count");
+  const matchesElement = root.querySelector(".curion-match-count");
+  const unmappedElement = root.querySelector(".curion-unmapped");
+
+  messageElement.textContent = message || "Review and fill the fields Curion can confidently map.";
+  fieldsElement.textContent = `${analysis.fieldCount} fields`;
+  matchesElement.textContent = `${analysis.mappedCount} can fill`;
+  primary.disabled = analysis.mappedCount === 0;
+
+  primary.addEventListener("click", async () => {
+    const stored = await chrome.storage.local.get([
+      "curionProfile",
+      "curionWorkingMetadata",
+      "curionSubmitMode"
+    ]);
+    const profile = activeProfileFromSettings(stored);
+    const result = fillAndMaybeSubmit(profile, stored.curionSubmitMode || "review");
+    const remaining = Math.max(0, result.fieldCount - result.filledCount);
+    const skipped = unmappedLabels(result);
+
+    messageElement.textContent = remaining
+      ? `Curion filled ${result.filledCount} ${pluralize(result.filledCount, "field")}. ${remaining} ${pluralize(remaining, "field")} need your input.`
+      : `Curion filled all ${result.filledCount} matched ${pluralize(result.filledCount, "field")}.`;
+    fieldsElement.textContent = `${result.fieldCount} ${pluralize(result.fieldCount, "field")}`;
+    matchesElement.textContent = `${result.filledCount} filled`;
+    primary.textContent = "Done";
+    primary.disabled = true;
+    secondary.textContent = "Close";
+
+    if (skipped.length) {
+      unmappedElement.hidden = false;
+      unmappedElement.textContent = `Skipped: ${skipped.join(", ")}${remaining > skipped.length ? ", ..." : ""}`;
+    }
+  });
+
+  secondary.addEventListener("click", () => {
+    autoFillPausedForPage = true;
+    removeCurionPrompt();
+  });
+  close.addEventListener("click", () => {
+    autoFillPausedForPage = true;
+    removeCurionPrompt();
+  });
+
+  document.documentElement.append(root);
+  curionPrompt = root;
 }
 
 async function maybeAutoFill() {
@@ -382,7 +634,22 @@ async function maybeAutoFill() {
   if (signature === lastAutoFillSignature) return;
   lastAutoFillSignature = signature;
 
-  fillAndMaybeSubmit(profile, stored.curionSubmitMode || "review");
+  const analysis = analyze(profile);
+  const promptSignature = JSON.stringify({
+    signature,
+    mappedCount: analysis.mappedCount,
+    fieldCount: analysis.fieldCount
+  });
+
+  if (promptSignature === lastPromptSignature) return;
+  lastPromptSignature = promptSignature;
+
+  renderCurionPrompt(
+    analysis,
+    analysis.mappedCount
+      ? "Curion can partially fill this form. Unmapped fields will be left for you."
+      : "Curion found a form, but none of these fields match your saved metadata yet."
+  );
 }
 
 function scheduleAutoFill() {

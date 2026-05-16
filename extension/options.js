@@ -10,7 +10,7 @@ const SAMPLE_PROFILE = {
   postalCode: "560001",
   country: "India",
   linkedin: "https://www.linkedin.com/in/satyanvm/",
-  website: "https://curion.website",
+  website: "https://frontend-six-omega-77.vercel.app",
   preferredContactMethod: "Email",
   notes: "Curion profile for filling repetitive forms with review.",
   acceptTerms: "yes"
