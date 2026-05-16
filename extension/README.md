@@ -2,6 +2,8 @@
 
 Manifest V3 extension that scans forms, maps visible fields to saved metadata, fills matched values, and can clear filled fields again.
 
+Frontend site: `https://frontend-six-omega-77.vercel.app`
+
 ## How Users Provide Metadata
 
 Curion uses a fixed profile object plus optional per-form context. The extension now has two metadata layers:
@@ -62,8 +64,11 @@ Keep the extension JSON path for individuals. Use API-fed metadata for business 
 1. Load unpacked extension from this folder in `chrome://extensions`.
 2. Save default metadata in options or paste working metadata JSON.
 3. Open a form page.
-4. Use the Curion popup to scan, review mappings, fill matched fields, or unfill visible controls.
-5. If Curion is enabled, manual scan/fill works from the popup and page-load auto-fill can run using the active metadata.
+4. Enable Curion scanning and form filling in options.
+5. When Curion detects a form, use the on-page **Auto-fill** prompt to fill the mapped fields.
+6. Use the popup to scan, fill, or unfill visible controls manually.
+
+For local `file://` HTML form tests, open `chrome://extensions`, expand Curion details, and enable **Allow access to file URLs**. Chrome blocks content scripts on local files until that switch is enabled.
 
 If the backend API URL is empty or unavailable, the popup falls back to deterministic local matching in the content script.
 

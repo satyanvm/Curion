@@ -2,6 +2,12 @@
 
 Recommended host: Vercel.
 
+Current production URL:
+
+```text
+https://frontend-six-omega-77.vercel.app
+```
+
 ## Project Settings
 
 - Project root: `frontend`
