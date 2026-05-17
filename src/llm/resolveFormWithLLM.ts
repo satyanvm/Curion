@@ -147,6 +147,7 @@ export async function resolveFormWithLLM(
         "Treat already-mapped anchors as context for the form's pattern, but correct low-confidence guesses when the context points elsewhere.",
         "Prefer unused profile keys unless the form clearly repeats the same information or the target field's current mapping is genuinely correct.",
         "For select/checkbox fields, return values that match visible options when provided.",
+        "Never map an email-looking field to a non-email profile value. If the email value is missing, leave that field unmapped.",
         "Return strict JSON with:",
         "- fieldRepairs: array of { label, selector, type, name?, placeholder?, options? } for repaired or newly discovered fields",
         "- mappings: object keyed by exact field label with profile values for target fields only; never return profile key names like company, city, state, postalCode, notes, or acceptTerms",
