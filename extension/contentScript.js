@@ -379,8 +379,10 @@ function semanticValueForField(field, candidates) {
 
 function profileValueForField(field, candidates) {
   const ruleMapping = ruleBasedValueForField(field, candidates);
-  if (ruleMapping?.confidence >= 0.82) return ruleMapping;
-  return semanticValueForField(field, candidates) || ruleMapping;
+  const semanticMapping = semanticValueForField(field, candidates);
+  if (!ruleMapping) return semanticMapping;
+  if (!semanticMapping) return ruleMapping;
+  return semanticMapping.confidence >= ruleMapping.confidence ? semanticMapping : ruleMapping;
 }
 
 function analyze(profile) {
