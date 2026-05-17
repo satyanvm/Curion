@@ -138,12 +138,39 @@ function labelFor(control) {
     .trim();
 }
 
+function controlIntentText(control) {
+  return normalize([
+    labelFor(control),
+    control.getAttribute("name"),
+    control.id,
+    control.getAttribute("placeholder"),
+    control.getAttribute("autocomplete"),
+    control.getAttribute("aria-label"),
+    control.getAttribute("role")
+  ].join(" "));
+}
+
+function isLowIntentControl(control) {
+  const tag = control.tagName.toLowerCase();
+  const type = (control.getAttribute("type") || "").toLowerCase();
+  const intentText = controlIntentText(control);
+  const container = control.closest("search, [role='search'], nav, header");
+
+  if (type === "search" || control.getAttribute("role") === "searchbox") return true;
+  if (container && containsAny(intentText, ["search", "query", "keyword", "find"])) return true;
+  if (tag === "input" && containsAny(intentText, ["search", "query", "keyword"])) return true;
+  return false;
+}
+
 function getControls() {
   return Array.from(document.querySelectorAll("input, textarea, select")).filter((control) => {
     const type = (control.getAttribute("type") || "").toLowerCase();
-    if (["hidden", "submit", "button", "reset", "file", "image"].includes(type)) return false;
+    if (control.closest("#curion-root")) return false;
+    if (["hidden", "submit", "button", "reset", "file", "image", "password", "search"].includes(type)) return false;
+    if (control.disabled || control.readOnly) return false;
+    if (isLowIntentControl(control)) return false;
     const style = window.getComputedStyle(control);
-    return style.display !== "none" && style.visibility !== "hidden" && !control.disabled;
+    return style.display !== "none" && style.visibility !== "hidden" && style.opacity !== "0";
   });
 }
 
@@ -372,6 +399,25 @@ function analyze(profile) {
     mappedCount,
     mappings
   };
+}
+
+function fieldLooksRich(field) {
+  return ["textarea", "select", "checkbox", "radio"].includes(field.type);
+}
+
+function fieldHasFormOwner(field) {
+  const control = document.querySelector(field.selector);
+  const form = control?.closest("form");
+  return form ? formScore(form) >= 2 : false;
+}
+
+function shouldOfferAutoFill(analysis) {
+  if (!analysis || analysis.mappedCount === 0) return false;
+  if (analysis.fieldCount >= 2) return true;
+  if ((analysis.mappings || []).filter((entry) => entry.mapping).length >= 2) return true;
+  return (analysis.mappings || []).some((entry) => {
+    return entry.mapping && (fieldLooksRich(entry.field) || fieldHasFormOwner(entry.field));
+  });
 }
 
 function hasProfile(profile) {
@@ -806,6 +852,11 @@ async function maybeAutoFill() {
   lastAutoFillSignature = signature;
 
   const analysis = analyze(profile);
+  if (!shouldOfferAutoFill(analysis)) {
+    removeCurionPrompt();
+    return;
+  }
+
   const promptSignature = JSON.stringify({
     signature,
     mappedCount: analysis.mappedCount,

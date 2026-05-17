@@ -354,7 +354,6 @@ export async function mapFieldsWithConfidence(
         "Use the profile schema descriptions to understand what each available profile value represents.",
         "Prefer unused profile values when they clearly fit an unmapped field, and avoid duplicating an already mapped profile value unless the form truly asks for the same information twice.",
         "Consider field order and neighboring fields when labels are short or ambiguous.",
-        "Never map an email-looking field to a non-email profile value. If the email value is missing, leave that field unmapped.",
         "Return strict JSON where each key is the exact field label and each value is the chosen text value.",
         "Only map fields when there is a clear fit.",
       ].join(" "),

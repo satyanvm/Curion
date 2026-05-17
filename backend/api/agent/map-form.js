@@ -370,7 +370,6 @@ async function repairWithLlm({ body, fields, profile, extractionReport, determin
       "Use the page HTML, field metadata, extraction confidence, deterministic guesses, already mapped anchors, and profile schema.",
       "Return strict JSON with a mappings object keyed by exact field label.",
       "Mapping values must be actual profile values, never profile key names like company, city, state, postalCode, notes, or acceptTerms.",
-      "Never map an email-looking field to a non-email profile value. If the email value is missing, leave that field unmapped.",
       "Only map a field when there is a clear fit."
     ].join(" "),
     {
