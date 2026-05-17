@@ -18,7 +18,12 @@ import { resolveFormWithLLM } from "./resolveFormWithLLM";
 import { semanticMatchFieldsDetailed } from "../semantic/semanticMatch";
 
 function normalize(text: string): string {
-  return text.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  return text
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
 }
 
 type RuleFieldDecision = {
@@ -28,6 +33,29 @@ type RuleFieldDecision = {
   reasons: string[];
   weaknesses: string[];
 };
+
+function fieldMeaning(field: FormField): string {
+  return normalize([field.label, field.name ?? "", field.placeholder ?? "", field.type].join(" "));
+}
+
+function getRequiredKeyForField(field: FormField): keyof UserProfile | null {
+  const meaning = fieldMeaning(field);
+  if (field.type === "email" || /(^| )(email|e mail)( |$)/.test(meaning)) return "email";
+  if (field.type === "tel" || /(^| )(phone|mobile|telephone|tel)( |$)/.test(meaning)) return "phone";
+  return null;
+}
+
+function isEmailValue(value: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
+}
+
+function mappingCompatibleWithField(field: FormField, mappedKey: keyof UserProfile, mappedValue: string): boolean {
+  const requiredKey = getRequiredKeyForField(field);
+  if (!requiredKey) return true;
+  if (mappedKey !== requiredKey) return false;
+  if (requiredKey === "email") return isEmailValue(mappedValue);
+  return true;
+}
 
 function ruleBasedMap(fields: FormField[], userProfile: UserProfile): Map<string, RuleFieldDecision> {
   const values = new Map<string, RuleFieldDecision>();
@@ -45,6 +73,7 @@ function ruleBasedMap(fields: FormField[], userProfile: UserProfile): Map<string
       reasons: string[],
       weaknesses: string[] = []
     ): void => {
+      if (!userProfile[mappedKey]) return;
       values.set(field.label, {
         mappedKey,
         mappedValue: userProfile[mappedKey],
@@ -183,7 +212,7 @@ function applyLlmMappings(
     const rawMappedValue = mappings[field.label];
     if (!rawMappedValue) continue;
 
-    const profileKeys = Object.keys(userProfile) as Array<keyof UserProfile>;
+    const profileKeys = (Object.keys(userProfile) as Array<keyof UserProfile>).filter((key) => userProfile[key]);
     const returnedKey = profileKeys.find((key) => key === rawMappedValue);
     const matchedKey =
       returnedKey ??
@@ -192,6 +221,7 @@ function applyLlmMappings(
     if (!matchedKey) continue;
 
     const mappedValue = userProfile[matchedKey];
+    if (!mappingCompatibleWithField(field, matchedKey, mappedValue)) continue;
     mappedValues[field.label] = mappedValue;
     decisions.set(field.label, {
       label: field.label,

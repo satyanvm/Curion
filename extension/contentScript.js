@@ -17,12 +17,23 @@ const PROFILE_SCHEMA = {
 };
 
 function normalize(text) {
-  return String(text || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  return String(text || "")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
 }
 
 function containsAny(text, terms) {
   const normalized = normalize(text);
-  return terms.some((term) => normalized.split(" ").includes(term));
+  const tokens = normalized.split(" ");
+  return terms.some((term) => {
+    const normalizedTerm = normalize(term);
+    return normalizedTerm.includes(" ")
+      ? normalized.includes(normalizedTerm)
+      : tokens.includes(normalizedTerm);
+  });
 }
 
 function labelizeKey(key) {
@@ -45,6 +56,28 @@ function metadataEntries(metadata, prefix = "") {
       label: labelizeKey(path),
       value: Array.isArray(value) ? value.join(", ") : String(value)
     }];
+  });
+}
+
+function profileSchemaKeyForEntry(entry) {
+  const segments = String(entry.key || "").split(".");
+  const lastSegment = segments[segments.length - 1];
+  return Object.prototype.hasOwnProperty.call(PROFILE_SCHEMA, lastSegment) ? lastSegment : "";
+}
+
+function profileCandidates(profile) {
+  return metadataEntries(profile).map((entry) => {
+    const schemaKey = profileSchemaKeyForEntry(entry);
+    return {
+      ...entry,
+      schemaKey,
+      aliases: Array.from(new Set([
+        entry.key,
+        entry.label,
+        schemaKey,
+        ...(schemaKey ? PROFILE_SCHEMA[schemaKey] : [])
+      ].filter(Boolean)))
+    };
   });
 }
 
@@ -105,12 +138,39 @@ function labelFor(control) {
     .trim();
 }
 
+function controlIntentText(control) {
+  return normalize([
+    labelFor(control),
+    control.getAttribute("name"),
+    control.id,
+    control.getAttribute("placeholder"),
+    control.getAttribute("autocomplete"),
+    control.getAttribute("aria-label"),
+    control.getAttribute("role")
+  ].join(" "));
+}
+
+function isLowIntentControl(control) {
+  const tag = control.tagName.toLowerCase();
+  const type = (control.getAttribute("type") || "").toLowerCase();
+  const intentText = controlIntentText(control);
+  const container = control.closest("search, [role='search'], nav, header");
+
+  if (type === "search" || control.getAttribute("role") === "searchbox") return true;
+  if (container && containsAny(intentText, ["search", "query", "keyword", "find"])) return true;
+  if (tag === "input" && containsAny(intentText, ["search", "query", "keyword"])) return true;
+  return false;
+}
+
 function getControls() {
   return Array.from(document.querySelectorAll("input, textarea, select")).filter((control) => {
     const type = (control.getAttribute("type") || "").toLowerCase();
-    if (["hidden", "submit", "button", "reset", "file", "image"].includes(type)) return false;
+    if (control.closest("#curion-root")) return false;
+    if (["hidden", "submit", "button", "reset", "file", "image", "password", "search"].includes(type)) return false;
+    if (control.disabled || control.readOnly) return false;
+    if (isLowIntentControl(control)) return false;
     const style = window.getComputedStyle(control);
-    return style.display !== "none" && style.visibility !== "hidden" && !control.disabled;
+    return style.display !== "none" && style.visibility !== "hidden" && style.opacity !== "0";
   });
 }
 
@@ -132,9 +192,69 @@ function extractFields() {
   }));
 }
 
-function profileValueForField(field, profile) {
+function fieldText(field) {
+  return normalize([field.label, field.name, field.placeholder, field.type].join(" "));
+}
+
+function isEmailField(field) {
+  const text = fieldText(field);
+  return field.type === "email" || /(^| )(email|e mail)( |$)/.test(text);
+}
+
+function isPhoneField(field) {
+  const text = fieldText(field);
+  return field.type === "tel" || /(^| )(phone|mobile|telephone|tel)( |$)/.test(text);
+}
+
+function isUrlField(field) {
+  const text = fieldText(field);
+  return field.type === "url" || /(^| )(linkedin|website|portfolio|homepage|url)( |$)/.test(text);
+}
+
+function isSelectField(field) {
+  return field.type === "select";
+}
+
+function keyLooksLike(key, expected) {
+  return normalize(labelizeKey(key)).split(" ").includes(expected);
+}
+
+function isEmailValue(value) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || "").trim());
+}
+
+function mappingCompatibleWithField(field, mapping) {
+  if (!mapping?.value) return false;
+
+  if (isEmailField(field)) {
+    return keyLooksLike(mapping.key, "email") && isEmailValue(mapping.value);
+  }
+
+  if (isPhoneField(field)) {
+    return keyLooksLike(mapping.key, "phone") || keyLooksLike(mapping.key, "tel") || keyLooksLike(mapping.key, "mobile");
+  }
+
+  if (isUrlField(field)) {
+    return keyLooksLike(mapping.key, "linkedin") || keyLooksLike(mapping.key, "website") || keyLooksLike(mapping.key, "url");
+  }
+
+  return true;
+}
+
+function mappingFromCandidate(field, candidate, confidence, method) {
+  const mapping = {
+    key: candidate.key,
+    value: String(candidate.value),
+    confidence,
+    method
+  };
+  return mappingCompatibleWithField(field, mapping) ? mapping : null;
+}
+
+function ruleBasedValueForField(field, candidates) {
   const haystack = normalize([field.label, field.name, field.placeholder].join(" "));
   const relationalNameTerms = ["mother", "father", "parent", "guardian", "spouse", "wife", "husband"];
+  let bestCandidate = null;
   let bestKey = "";
   let bestScore = 0;
 
@@ -142,15 +262,17 @@ function profileValueForField(field, profile) {
     const score = hints.reduce((total, hint) => {
       return total + (haystack.includes(normalize(hint)) ? 1 : 0);
     }, 0);
+    const candidate = candidates.find((entry) => entry.schemaKey === key || entry.key === key);
 
-    if (score > bestScore && profile[key]) {
+    if (score > bestScore && candidate) {
       bestKey = key;
+      bestCandidate = candidate;
       bestScore = score;
     }
   }
 
   if (!bestKey) {
-    for (const entry of metadataEntries(profile)) {
+    for (const entry of candidates) {
       if (
         containsAny(haystack, relationalNameTerms) &&
         normalize(entry.label).split(" ").includes("name") &&
@@ -165,12 +287,13 @@ function profileValueForField(field, profile) {
 
       if (keyScore > bestScore) {
         bestKey = entry.key;
+        bestCandidate = entry;
         bestScore = keyScore;
       }
     }
   }
 
-  if (!bestKey) return null;
+  if (!bestCandidate) return null;
   if (
     bestKey === "name" &&
     containsAny(haystack, relationalNameTerms) &&
@@ -179,19 +302,93 @@ function profileValueForField(field, profile) {
     return null;
   }
 
-  const value = metadataEntries(profile).find((entry) => entry.key === bestKey)?.value || profile[bestKey];
-  return {
-    key: bestKey,
-    value: String(value),
-    confidence: Math.min(0.96, 0.62 + bestScore * 0.12)
-  };
+  return mappingFromCandidate(field, bestCandidate, Math.min(0.96, 0.62 + bestScore * 0.12), "rule");
+}
+
+function tokenOverlapScore(fieldTokens, aliasTokens) {
+  if (!fieldTokens.length || !aliasTokens.length) return 0;
+  const overlapCount = aliasTokens.filter((token) => fieldTokens.includes(token)).length;
+  return overlapCount ? overlapCount / aliasTokens.length : 0;
+}
+
+function typeCompatibilityBoost(field, candidate) {
+  if (isEmailField(field) && candidate.schemaKey === "email") return 0.45;
+  if (isPhoneField(field) && candidate.schemaKey === "phone") return 0.45;
+  if (isUrlField(field) && ["linkedin", "website"].includes(candidate.schemaKey)) return 0.35;
+  if (isSelectField(field) && ["country", "preferredContactMethod"].includes(candidate.schemaKey)) return 0.25;
+  return 0;
+}
+
+function optionBoost(field, candidate) {
+  if (!isSelectField(field) || !field.options?.length) return 0;
+  return field.options.some((option) => normalize(option) === normalize(candidate.value)) ? 0.35 : 0;
+}
+
+function semanticScoreCandidate(field, candidate) {
+  const compatibleMapping = mappingCompatibleWithField(field, candidate);
+  if (!compatibleMapping) return 0;
+
+  const fieldMeaning = normalize([
+    field.label,
+    field.name,
+    field.placeholder,
+    field.type,
+    ...(field.options || [])
+  ].join(" "));
+  const fieldTokens = fieldMeaning.split(" ").filter(Boolean);
+  let score = 0;
+
+  for (const alias of candidate.aliases) {
+    const normalizedAlias = normalize(alias);
+    if (!normalizedAlias) continue;
+
+    if (fieldMeaning === normalizedAlias) {
+      score = Math.max(score, 0.95);
+      continue;
+    }
+
+    if (fieldMeaning.includes(normalizedAlias)) {
+      score = Math.max(score, normalizedAlias.includes(" ") ? 0.88 : 0.76);
+    }
+
+    score = Math.max(
+      score,
+      0.7 * tokenOverlapScore(fieldTokens, normalizedAlias.split(" ").filter(Boolean))
+    );
+  }
+
+  return Math.max(0, Math.min(1, score + typeCompatibilityBoost(field, candidate) + optionBoost(field, candidate)));
+}
+
+function semanticValueForField(field, candidates) {
+  const ranked = candidates
+    .map((candidate) => ({
+      candidate,
+      score: semanticScoreCandidate(field, candidate)
+    }))
+    .sort((left, right) => right.score - left.score);
+  const best = ranked[0];
+  const runnerUp = ranked[1];
+
+  if (!best || best.score < 0.82) return null;
+  const gap = runnerUp ? best.score - runnerUp.score : best.score;
+  if (gap < 0.12) return null;
+
+  return mappingFromCandidate(field, best.candidate, Math.min(0.96, best.score), "semantic");
+}
+
+function profileValueForField(field, candidates) {
+  const ruleMapping = ruleBasedValueForField(field, candidates);
+  if (ruleMapping?.confidence >= 0.82) return ruleMapping;
+  return semanticValueForField(field, candidates) || ruleMapping;
 }
 
 function analyze(profile) {
   const fields = extractFields();
+  const candidates = profileCandidates(profile);
   const mappings = fields.map((field) => ({
     field,
-    mapping: profileValueForField(field, profile)
+    mapping: profileValueForField(field, candidates)
   }));
 
   const mappedCount = mappings.filter((entry) => entry.mapping).length;
@@ -202,6 +399,25 @@ function analyze(profile) {
     mappedCount,
     mappings
   };
+}
+
+function fieldLooksRich(field) {
+  return ["textarea", "select", "checkbox", "radio"].includes(field.type);
+}
+
+function fieldHasFormOwner(field) {
+  const control = document.querySelector(field.selector);
+  const form = control?.closest("form");
+  return form ? formScore(form) >= 2 : false;
+}
+
+function shouldOfferAutoFill(analysis) {
+  if (!analysis || analysis.mappedCount === 0) return false;
+  if (analysis.fieldCount >= 2) return true;
+  if ((analysis.mappings || []).filter((entry) => entry.mapping).length >= 2) return true;
+  return (analysis.mappings || []).some((entry) => {
+    return entry.mapping && (fieldLooksRich(entry.field) || fieldHasFormOwner(entry.field));
+  });
 }
 
 function hasProfile(profile) {
@@ -301,6 +517,7 @@ function fillReturnedMappings(mappings) {
     const field = entry.field;
     const mapping = entry.mapping;
     if (!field || !mapping?.value) continue;
+    if (!mappingCompatibleWithField(field, mapping)) continue;
 
     const control =
       controls[field.index] ||
@@ -635,6 +852,11 @@ async function maybeAutoFill() {
   lastAutoFillSignature = signature;
 
   const analysis = analyze(profile);
+  if (!shouldOfferAutoFill(analysis)) {
+    removeCurionPrompt();
+    return;
+  }
+
   const promptSignature = JSON.stringify({
     signature,
     mappedCount: analysis.mappedCount,

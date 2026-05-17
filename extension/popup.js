@@ -1,7 +1,7 @@
 const DEFAULT_PROFILE = {
   name: "Satya Narayan Verma",
-  email: "",
-  phone: "",
+  email: "satya@example.com",
+  phone: "+91 9876543210",
   company: "",
   jobTitle: "",
   address: "",
@@ -36,12 +36,14 @@ function getElements() {
     scanButton: document.getElementById("scanButton"),
     fillButton: document.getElementById("fillButton"),
     unfillButton: document.getElementById("unfillButton"),
+    enableInput: document.getElementById("enableInput"),
     profileWarning: document.getElementById("profileWarning"),
     metadataMode: document.getElementById("metadataMode"),
     submitMode: document.getElementById("submitMode"),
     mappingList: document.getElementById("mappingList"),
     editProfileButton: document.getElementById("editProfileButton"),
-    openOptionsButton: document.getElementById("openOptionsButton")
+    openOptionsButton: document.getElementById("openOptionsButton"),
+    useSampleButton: document.getElementById("useSampleButton")
   };
 }
 
@@ -91,6 +93,25 @@ async function saveDefaultProfile() {
   state.activeMetadata = hasMetadata(state.workingMetadata) ? state.workingMetadata : state.profile;
 }
 
+async function setCurionEnabled(enabled) {
+  await chrome.storage.local.set({ curionAutoFillEnabled: enabled });
+  state.autoFillEnabled = enabled;
+  renderProfileState();
+}
+
+async function useSampleProfile() {
+  await chrome.storage.local.set({
+    curionProfile: DEFAULT_PROFILE,
+    curionWorkingMetadata: {},
+    curionAutoFillEnabled: true
+  });
+  state.profile = DEFAULT_PROFILE;
+  state.workingMetadata = {};
+  state.activeMetadata = DEFAULT_PROFILE;
+  state.autoFillEnabled = true;
+  renderProfileState();
+}
+
 function renderProfileState() {
   const elements = getElements();
   const ready = hasMetadata(state.activeMetadata);
@@ -100,7 +121,8 @@ function renderProfileState() {
   elements.profileWarning.hidden = ready;
   elements.scanButton.disabled = !ready || !enabled;
   elements.fillButton.disabled = true;
-  elements.metadataMode.textContent = `${usingWorkingMetadata ? "Working metadata" : "Saved profile"}${
+  elements.enableInput.checked = enabled;
+  elements.metadataMode.textContent = `${ready ? (usingWorkingMetadata ? "Working metadata" : "Saved profile") : "No metadata"}${
     enabled ? " · enabled" : " · off"
   }`;
   elements.submitMode.textContent = state.submitMode === "direct"
@@ -108,12 +130,12 @@ function renderProfileState() {
     : "Review before submit";
 
   if (!ready) {
-    elements.pageStatus.textContent = "Add profile data before filling forms";
+    elements.pageStatus.textContent = "Add metadata or use sample data to test";
     return;
   }
 
   if (!enabled) {
-    elements.pageStatus.textContent = "Turn on auto-fill in options to scan or fill";
+    elements.pageStatus.textContent = "Enable Curion below to scan or fill";
   }
 }
 
@@ -285,11 +307,15 @@ async function init() {
   }
 
   renderProfileState();
+  elements.enableInput.addEventListener("change", () => {
+    setCurionEnabled(elements.enableInput.checked).catch(showError);
+  });
   elements.scanButton.addEventListener("click", () => scanPage().catch(showError));
   elements.fillButton.addEventListener("click", () => fillPage().catch(showError));
   elements.unfillButton.addEventListener("click", () => unfillPage().catch(showError));
   elements.editProfileButton.addEventListener("click", openOptions);
   elements.openOptionsButton.addEventListener("click", openOptions);
+  elements.useSampleButton.addEventListener("click", () => useSampleProfile().catch(showError));
 }
 
 function showError(error) {

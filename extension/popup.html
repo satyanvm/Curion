@@ -35,6 +35,11 @@
         <span id="submitMode">Review before submit</span>
       </section>
 
+      <label class="enable-row">
+        <input id="enableInput" type="checkbox" />
+        <span>Enable Curion on form pages</span>
+      </label>
+
       <section class="actions">
         <button id="scanButton" type="button">Scan page</button>
         <button id="fillButton" class="primary" type="button" disabled>Fill matched fields</button>
@@ -43,7 +48,10 @@
 
       <section class="profile-warning" id="profileWarning" hidden>
         <p>Add profile data before filling forms.</p>
-        <button id="openOptionsButton" type="button">Open profile</button>
+        <div class="warning-actions">
+          <button id="useSampleButton" type="button">Use sample</button>
+          <button id="openOptionsButton" type="button">Open profile</button>
+        </div>
       </section>
 
       <section class="mapping-list" id="mappingList" aria-label="Detected mappings"></section>

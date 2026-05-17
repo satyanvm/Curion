@@ -71,6 +71,8 @@ function setCorsHeaders(response) {
 
 function normalize(text) {
   return String(text || "")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
     .replace(/([a-z])([A-Z])/g, "$1 $2")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, " ")
@@ -138,6 +140,29 @@ function typeScore(type) {
   return 0.45;
 }
 
+function fieldMeaning(field) {
+  return normalize([field.label, field.name, field.placeholder, field.type, ...(field.options || [])].join(" "));
+}
+
+function requiredKeyForField(field) {
+  const meaning = fieldMeaning(field);
+  if (field.type === "email" || /(^| )(email|e mail)( |$)/.test(meaning)) return "email";
+  if (field.type === "tel" || /(^| )(phone|mobile|telephone|tel)( |$)/.test(meaning)) return "phone";
+  return null;
+}
+
+function isEmailValue(value) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || "").trim());
+}
+
+function isMappingCompatible(field, key, value) {
+  const requiredKey = requiredKeyForField(field);
+  if (!requiredKey) return true;
+  if (key !== requiredKey) return false;
+  if (requiredKey === "email") return isEmailValue(value);
+  return true;
+}
+
 function calculateExtractionConfidence(fields) {
   if (fields.length === 0) {
     return {
@@ -189,15 +214,16 @@ function calculateExtractionConfidence(fields) {
 
 function scoreCandidate(field, key, profile) {
   if (!profile[key]) return 0;
-  const fieldMeaning = normalize([field.label, field.name, field.placeholder, field.type, ...(field.options || [])].join(" "));
+  if (!isMappingCompatible(field, key, profile[key])) return 0;
+  const meaning = fieldMeaning(field);
   const aliases = [key, ...PROFILE_SCHEMA[key].aliases];
   let score = 0;
 
   for (const alias of aliases) {
     const normalizedAlias = normalize(alias);
     if (!normalizedAlias) continue;
-    if (fieldMeaning === normalizedAlias) score = Math.max(score, 0.96);
-    if (fieldMeaning.includes(normalizedAlias)) score = Math.max(score, normalizedAlias.includes(" ") ? 0.88 : 0.76);
+    if (meaning === normalizedAlias) score = Math.max(score, 0.96);
+    if (meaning.includes(normalizedAlias)) score = Math.max(score, normalizedAlias.includes(" ") ? 0.88 : 0.76);
   }
 
   if (field.type === "email" && key === "email") score += 0.45;
@@ -376,6 +402,7 @@ function mergeLlmMappings(deterministicMappings, llmMappings, profile) {
   return deterministicMappings.map((entry) => {
     const llmMapping = normalized[entry.field.label];
     if (!llmMapping) return entry;
+    if (!isMappingCompatible(entry.field, llmMapping.key, llmMapping.value)) return entry;
 
     return {
       ...entry,

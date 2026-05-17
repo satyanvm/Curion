@@ -29,6 +29,7 @@ a {
 
 button {
   min-height: 38px;
+  padding: 0 12px;
   border: 1px solid var(--line);
   border-radius: 7px;
   background: var(--bg);
@@ -159,6 +160,27 @@ h1 {
   white-space: nowrap;
 }
 
+.enable-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 42px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.enable-row input {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  margin: 0;
+}
+
 .actions {
   gap: 8px;
 }
@@ -169,13 +191,17 @@ h1 {
 
 .profile-warning {
   display: grid;
-  grid-template-columns: 1fr auto;
   gap: 10px;
-  align-items: center;
   padding: 10px;
   border: 1px dashed #bcbcbc;
   border-radius: 8px;
   background: var(--soft);
+}
+
+.warning-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
 }
 
 .mapping-list {

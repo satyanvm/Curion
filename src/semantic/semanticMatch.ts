@@ -78,6 +78,8 @@ const PROFILE_ALIASES: Record<ProfileKey, string[]> = {
 
 function normalize(text: string): string {
   return text
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
     .replace(/([a-z])([A-Z])/g, "$1 $2")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, " ")
@@ -93,11 +95,13 @@ function unique<T>(items: T[]): T[] {
 }
 
 function buildProfileCandidates(userProfile: UserProfile): CandidateProfileField[] {
-  return (Object.keys(userProfile) as ProfileKey[]).map((key) => ({
-    key,
-    value: userProfile[key],
-    aliases: unique([key, ...PROFILE_ALIASES[key]]),
-  }));
+  return (Object.keys(userProfile) as ProfileKey[])
+    .filter((key) => userProfile[key])
+    .map((key) => ({
+      key,
+      value: userProfile[key],
+      aliases: unique([key, ...PROFILE_ALIASES[key]]),
+    }));
 }
 
 function buildFieldMeaning(field: FormField): string {
@@ -127,6 +131,25 @@ function getTypeCompatibilityBoost(field: FormField, key: ProfileKey): number {
   return 0;
 }
 
+function getRequiredKeyForField(field: FormField): ProfileKey | null {
+  const fieldMeaning = normalize(buildFieldMeaning(field));
+  if (field.type === "email" || /(^| )(email|e mail)( |$)/.test(fieldMeaning)) return "email";
+  if (field.type === "tel" || /(^| )(phone|mobile|telephone|tel)( |$)/.test(fieldMeaning)) return "phone";
+  return null;
+}
+
+function isEmailValue(value: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
+}
+
+function isCompatibleWithField(field: FormField, candidate: CandidateProfileField): boolean {
+  const requiredKey = getRequiredKeyForField(field);
+  if (!requiredKey) return true;
+  if (candidate.key !== requiredKey) return false;
+  if (requiredKey === "email") return isEmailValue(candidate.value);
+  return true;
+}
+
 function getOptionBoost(field: FormField, candidate: CandidateProfileField): number {
   if (field.type !== "select" || !field.options?.length) {
     return 0;
@@ -141,6 +164,13 @@ function getOptionBoost(field: FormField, candidate: CandidateProfileField): num
 }
 
 function scoreCandidate(field: FormField, candidate: CandidateProfileField): SemanticScore {
+  if (!isCompatibleWithField(field, candidate)) {
+    return {
+      key: candidate.key,
+      score: 0,
+    };
+  }
+
   const fieldMeaning = normalize(buildFieldMeaning(field));
   const fieldTokens = toTokens(fieldMeaning);
 
