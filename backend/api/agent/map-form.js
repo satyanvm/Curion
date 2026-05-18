@@ -1,6 +1,14 @@
 const HTML_SNIPPET_LIMIT = 25000;
 
 const PROFILE_SCHEMA = {
+  firstName: {
+    description: "A person's first or given name.",
+    aliases: ["first name", "given name", "forename"]
+  },
+  lastName: {
+    description: "A person's last name, surname, or family name.",
+    aliases: ["last name", "surname", "family name"]
+  },
   name: {
     description: "A person's full name.",
     aliases: ["name", "full name", "your name", "contact name", "applicant", "candidate", "primary contact"]
@@ -107,7 +115,22 @@ function sanitizeProfile(profile) {
   for (const key of Object.keys(PROFILE_SCHEMA)) {
     clean[key] = String(profile?.[key] || "");
   }
+
+  const nameParts = splitNameParts(clean.name);
+  if (!clean.firstName && nameParts.firstName) clean.firstName = nameParts.firstName;
+  if (!clean.lastName && nameParts.lastName) clean.lastName = nameParts.lastName;
+
   return clean;
+}
+
+function splitNameParts(name) {
+  const parts = String(name || "").trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return {};
+  if (parts.length === 1) return { firstName: parts[0] };
+  return {
+    firstName: parts.slice(0, -1).join(" "),
+    lastName: parts[parts.length - 1]
+  };
 }
 
 function isReadableText(text) {

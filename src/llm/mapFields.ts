@@ -57,6 +57,19 @@ function mappingCompatibleWithField(field: FormField, mappedKey: keyof UserProfi
   return true;
 }
 
+function enrichUserProfile(userProfile: UserProfile): UserProfile {
+  if (userProfile.firstName || userProfile.lastName) return userProfile;
+
+  const parts = userProfile.name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return userProfile;
+
+  return {
+    ...userProfile,
+    firstName: parts.length === 1 ? parts[0] : parts.slice(0, -1).join(" "),
+    lastName: parts.length > 1 ? parts[parts.length - 1] : undefined,
+  };
+}
+
 function ruleBasedMap(fields: FormField[], userProfile: UserProfile): Map<string, RuleFieldDecision> {
   const values = new Map<string, RuleFieldDecision>();
 
@@ -208,19 +221,22 @@ function applyLlmMappings(
   mappedValues: FieldValueMap,
   decisions: Map<string, MappingDecisionInput>
 ): void {
+  const enrichedProfile = enrichUserProfile(userProfile);
+
   for (const field of ambiguousFields) {
     const rawMappedValue = mappings[field.label];
     if (!rawMappedValue) continue;
 
-    const profileKeys = (Object.keys(userProfile) as Array<keyof UserProfile>).filter((key) => userProfile[key]);
+    const profileKeys = (Object.keys(enrichedProfile) as Array<keyof UserProfile>).filter((key) => enrichedProfile[key]);
     const returnedKey = profileKeys.find((key) => key === rawMappedValue);
     const matchedKey =
       returnedKey ??
-      profileKeys.find((key) => userProfile[key] === rawMappedValue);
+      profileKeys.find((key) => enrichedProfile[key] === rawMappedValue);
 
     if (!matchedKey) continue;
 
-    const mappedValue = userProfile[matchedKey];
+    const mappedValue = enrichedProfile[matchedKey];
+    if (!mappedValue) continue;
     if (!mappingCompatibleWithField(field, matchedKey, mappedValue)) continue;
     mappedValues[field.label] = mappedValue;
     decisions.set(field.label, {
