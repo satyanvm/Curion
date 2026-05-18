@@ -2,6 +2,8 @@ import { UserProfile } from "../types/types";
 import { MappingDecisionInput } from "../confidence/mappingConfidence";
 
 export const PROFILE_SCHEMA: Record<keyof UserProfile, string> = {
+  firstName: "A person's first or given name.",
+  lastName: "A person's last name, surname, or family name.",
   name: "A person's full name.",
   email: "An email address.",
   phone: "A phone or mobile number.",
@@ -44,12 +46,34 @@ export function buildAvailableProfileOptions(
   value: string;
 }> {
   const mappedKeys = new Set(Array.from(decisions.values()).map((decision) => decision.mappedKey));
+  const enrichedProfile = {
+    ...userProfile,
+    ...derivedNameParts(userProfile),
+  };
 
-  return (Object.keys(userProfile) as Array<keyof UserProfile>)
+  return (Object.keys(enrichedProfile) as Array<keyof UserProfile>)
     .filter((key) => !mappedKeys.has(key))
+    .filter((key) => enrichedProfile[key])
     .map((key) => ({
       key,
       description: PROFILE_SCHEMA[key],
-      value: userProfile[key],
+      value: enrichedProfile[key] ?? "",
     }));
+}
+
+function derivedNameParts(userProfile: UserProfile): Pick<UserProfile, "firstName" | "lastName"> {
+  if (userProfile.firstName || userProfile.lastName) {
+    return {
+      firstName: userProfile.firstName,
+      lastName: userProfile.lastName,
+    };
+  }
+
+  const parts = userProfile.name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return {};
+  if (parts.length === 1) return { firstName: parts[0] };
+  return {
+    firstName: parts.slice(0, -1).join(" "),
+    lastName: parts[parts.length - 1],
+  };
 }

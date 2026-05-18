@@ -10,6 +10,7 @@ type CandidateProfileField = {
 
 type SemanticScore = {
   key: ProfileKey;
+  value: string;
   score: number;
 };
 
@@ -23,6 +24,8 @@ export type SemanticFieldDecision = {
 };
 
 const PROFILE_ALIASES: Record<ProfileKey, string[]> = {
+  firstName: ["first name", "given name", "forename"],
+  lastName: ["last name", "surname", "family name"],
   name: [
     "name",
     "full name",
@@ -95,13 +98,35 @@ function unique<T>(items: T[]): T[] {
 }
 
 function buildProfileCandidates(userProfile: UserProfile): CandidateProfileField[] {
-  return (Object.keys(userProfile) as ProfileKey[])
-    .filter((key) => userProfile[key])
+  const enrichedProfile = {
+    ...userProfile,
+    ...derivedNameParts(userProfile),
+  };
+
+  return (Object.keys(enrichedProfile) as ProfileKey[])
+    .filter((key) => enrichedProfile[key])
     .map((key) => ({
       key,
-      value: userProfile[key],
+      value: enrichedProfile[key] ?? "",
       aliases: unique([key, ...PROFILE_ALIASES[key]]),
     }));
+}
+
+function derivedNameParts(userProfile: UserProfile): Pick<UserProfile, "firstName" | "lastName"> {
+  if (userProfile.firstName || userProfile.lastName) {
+    return {
+      firstName: userProfile.firstName,
+      lastName: userProfile.lastName,
+    };
+  }
+
+  const parts = userProfile.name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return {};
+  if (parts.length === 1) return { firstName: parts[0] };
+  return {
+    firstName: parts.slice(0, -1).join(" "),
+    lastName: parts[parts.length - 1],
+  };
 }
 
 function buildFieldMeaning(field: FormField): string {
@@ -167,6 +192,7 @@ function scoreCandidate(field: FormField, candidate: CandidateProfileField): Sem
   if (!isCompatibleWithField(field, candidate)) {
     return {
       key: candidate.key,
+      value: candidate.value,
       score: 0,
     };
   }
@@ -202,6 +228,7 @@ function scoreCandidate(field: FormField, candidate: CandidateProfileField): Sem
 
   return {
     key: candidate.key,
+    value: candidate.value,
     score,
   };
 }
@@ -256,7 +283,7 @@ export function semanticMatchFieldsDetailed(
 
     semanticValues.set(field.label, {
       mappedKey: best.key,
-      mappedValue: userProfile[best.key],
+      mappedValue: best.value,
       score: Math.max(0, Math.min(1, best.score)),
       candidateScores,
       reasons,

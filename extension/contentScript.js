@@ -1,4 +1,6 @@
 const PROFILE_SCHEMA = {
+  firstName: ["first name", "given name", "forename"],
+  lastName: ["last name", "surname", "family name"],
   name: ["full name", "your name", "contact name", "applicant", "candidate", "primary contact"],
   email: ["email", "e-mail", "inbox", "mail"],
   phone: ["phone", "mobile", "telephone", "tel", "line", "whatsapp"],
@@ -20,6 +22,7 @@ function normalize(text) {
   return String(text || "")
     .normalize("NFKD")
     .replace(/[\u0300-\u036f]/g, "")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, " ")
     .trim();
@@ -65,8 +68,43 @@ function profileSchemaKeyForEntry(entry) {
   return Object.prototype.hasOwnProperty.call(PROFILE_SCHEMA, lastSegment) ? lastSegment : "";
 }
 
+function splitNameParts(name) {
+  const parts = String(name || "").trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return {};
+  if (parts.length === 1) return { firstName: parts[0] };
+  return {
+    firstName: parts.slice(0, -1).join(" "),
+    lastName: parts[parts.length - 1]
+  };
+}
+
+function derivedNameEntries(entry) {
+  if (profileSchemaKeyForEntry(entry) !== "name") return [];
+
+  const parts = splitNameParts(entry.value);
+  const baseKey = entry.key.replace(/(^|.)name$/, (match, prefix) => `${prefix}`);
+  const baseLabel = entry.label.replace(/\bname\b/i, "").replace(/\s+/g, " ").trim();
+
+  return [
+    parts.firstName
+      ? {
+          key: `${baseKey}firstName`,
+          label: `${baseLabel ? `${baseLabel} ` : ""}first name`,
+          value: parts.firstName
+        }
+      : null,
+    parts.lastName
+      ? {
+          key: `${baseKey}lastName`,
+          label: `${baseLabel ? `${baseLabel} ` : ""}last name`,
+          value: parts.lastName
+        }
+      : null
+  ].filter(Boolean);
+}
+
 function profileCandidates(profile) {
-  return metadataEntries(profile).map((entry) => {
+  return metadataEntries(profile).flatMap((entry) => [entry, ...derivedNameEntries(entry)]).map((entry) => {
     const schemaKey = profileSchemaKeyForEntry(entry);
     return {
       ...entry,
@@ -378,11 +416,7 @@ function semanticValueForField(field, candidates) {
 }
 
 function profileValueForField(field, candidates) {
-  const ruleMapping = ruleBasedValueForField(field, candidates);
-  const semanticMapping = semanticValueForField(field, candidates);
-  if (!ruleMapping) return semanticMapping;
-  if (!semanticMapping) return ruleMapping;
-  return semanticMapping.confidence >= ruleMapping.confidence ? semanticMapping : ruleMapping;
+  return semanticValueForField(field, candidates);
 }
 
 function analyze(profile) {
