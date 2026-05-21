@@ -2,7 +2,25 @@
 
 Deploy this folder as the backend API for the Curion extension.
 
-## Endpoint
+## Endpoints
+
+`POST /api/profile/ingest`
+
+Request body:
+
+```json
+{
+  "userId": "user_123",
+  "profile": {
+    "shipping": {
+      "firstName": "Ada",
+      "city": "London"
+    }
+  }
+}
+```
+
+This endpoint flattens nested profile metadata into semantic atoms, embeds only structural descriptors with `gemini-embedding-2`, and stores the raw value separately in Supabase.
 
 `POST /api/agent/map-form`
 
@@ -10,12 +28,14 @@ Request body:
 
 ```json
 {
+  "userId": "user_123",
   "goal": "Fill this form",
   "url": "https://example.com/form",
   "title": "Example Form",
   "html": "<html>...</html>",
-  "fields": [],
-  "profile": {}
+  "fields": [
+    { "id": "f1", "label": "First Name", "name": "fname", "type": "text", "placeholder": "" }
+  ]
 }
 ```
 
@@ -23,7 +43,7 @@ Response body:
 
 ```json
 {
-  "source": "llm",
+  "source": "semantic-vector",
   "fieldCount": 4,
   "mappedCount": 3,
   "overallConfidence": 0.84,
@@ -37,9 +57,13 @@ Response body:
 Set these in Vercel:
 
 - `GEMINI_API_KEY`
-- `GEMINI_MODEL` optional, defaults to `gemini-2.5-flash`
+- `GEMINI_EMBEDDING_MODEL` optional, defaults to `gemini-embedding-2`
+- `SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `CURION_MAPPING_MAX_DISTANCE` optional, defaults to `0.42`
+- `CURION_MAPPING_MATCH_COUNT` optional, defaults to `5`
 
-If Gemini is not configured, the API still returns deterministic mappings.
+Run [backend/sql/profile_atoms.sql](/Users/satyanarayan/projects/Automation_bot_form_filling/project/backend/sql/profile_atoms.sql) in the Supabase SQL editor before deploying.
 
 ## Deploy
 
