@@ -4,11 +4,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "node --check api/agent/map-form.js",
+    "build": "node --check api/agent/map-form.js && node --check api/profile/ingest.js && node --check api/_lib/semantic-profile.js",
     "dev": "vercel dev",
     "deploy": "vercel --prod"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=24 <25"
   }
 }
