@@ -71,13 +71,13 @@ header {
 }
 
 .brand-mark {
-  display: grid;
+  display: block;
   width: 32px;
   height: 32px;
-  place-items: center;
+  flex: 0 0 auto;
+  object-fit: cover;
   border-radius: 7px;
   background: var(--ink);
-  color: #ffffff;
 }
 
 header p,

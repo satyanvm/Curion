@@ -17,7 +17,8 @@ Open **Curion -> Extension options**.
 
 - Edit default metadata in the form UI.
 - Paste default metadata into **Profile JSON** and click **Save JSON**.
-- Paste temporary JSON into **Current working metadata** and click **Use working JSON**.
+- Paste temporary JSON into **Current working metadata**. It activates as soon as the JSON is valid, and you can still click **Use working JSON** to force it on.
+- The working JSON editor starts empty so you can paste a fresh payload directly.
 - Clear working metadata to fall back to the saved profile.
 - Enter a **Backend profile user ID**, click **Sync to backend**, and enable **Use stored backend vector profile for scans** when you want scans to query Supabase profile atoms instead of sending transient JSON.
 - Enable **Curion scanning and form filling**.
@@ -91,4 +92,4 @@ The popup sends `profile`, `fields`, `html`, `goal`, and page context for transi
 | `options.html` / `options.js` | Default metadata, working JSON, API URL, and behavior settings |
 | `popup.html` / `popup.js` | Scan, review, fill, unfill |
 | `contentScript.js` | DOM extraction, backend mapping calls, auto-fill, unfill, direct submit |
-| `background.js` | Receives profile imports from the web setup page |
+| `background.js` | Handles backend profile sync requests from the options page |

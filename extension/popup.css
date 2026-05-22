@@ -78,16 +78,13 @@ footer {
 }
 
 .brand-mark {
-  display: grid;
+  display: block;
   width: 30px;
   height: 30px;
   flex: 0 0 auto;
-  place-items: center;
+  object-fit: cover;
   border-radius: 7px;
   background: var(--ink);
-  color: #ffffff;
-  font-size: 14px;
-  font-weight: 800;
 }
 
 h1,

@@ -76,6 +76,10 @@ function updateWorkingStats(metadata) {
   workingStats.textContent = count ? `${count} active fields` : "Inactive";
 }
 
+function isPlainObject(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
 function renderMetadataSourceButtons() {
   const usingWorkingMetadata = metadataSource === "working";
   saveWorkingJsonButton.classList.toggle("primary", usingWorkingMetadata);
@@ -170,23 +174,28 @@ async function syncBackendProfile() {
   const profile = activeProfileForSettings(formToProfile(), workingMetadata);
 
   setStatus(`Syncing profile atoms to backend: ${ingestUrl}`);
-  let response;
-  try {
-    response = await fetch(ingestUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
+  const result = await new Promise((resolve, reject) => {
+    chrome.runtime.sendMessage(
+      {
+        type: "CURION_SYNC_BACKEND_PROFILE",
+        apiUrl: apiUrlInput.value.trim() || DEFAULT_API_URL,
+        userId,
+        profile
       },
-      body: JSON.stringify({ userId, profile })
-    });
-  } catch (error) {
-    throw new Error(`Backend sync request failed for ${ingestUrl}: ${error.message || "Failed to fetch"}`);
-  }
-
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(payload.error || `Backend sync failed with status ${response.status}`);
-  }
+      (response) => {
+        const error = chrome.runtime.lastError;
+        if (error) {
+          reject(new Error(error.message || `Backend sync request failed for ${ingestUrl}`));
+          return;
+        }
+        if (!response?.ok) {
+          reject(new Error(response?.error || `Backend sync failed for ${ingestUrl}`));
+          return;
+        }
+        resolve(response.payload || {});
+      }
+    );
+  });
 
   await chrome.storage.local.set({
     curionUserId: userId,
@@ -195,7 +204,7 @@ async function syncBackendProfile() {
     curionMetadataSource: metadataSource
   });
   backendProfileInput.checked = true;
-  setStatus(`Backend profile synced for ${userId}. ${payload.atomCount || 0} atoms stored.`);
+  setStatus(`Backend profile synced for ${userId}. ${result.atomCount || 0} atoms stored.`);
 }
 
 async function saveWorkingJson() {
@@ -205,16 +214,20 @@ async function saveWorkingJson() {
   }
 
   const parsed = JSON.parse(workingJsonEditor.value);
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+  if (!isPlainObject(parsed)) {
     throw new Error("Working metadata must be a JSON object.");
   }
 
+  await applyWorkingJson(parsed, "Working metadata is now active.");
+  saveWorkingJsonButton.focus();
+}
+
+async function applyWorkingJson(parsed, statusMessage) {
   metadataSource = "working";
   await chrome.storage.local.set({ curionWorkingMetadata: parsed, curionMetadataSource: metadataSource });
   renderWorkingMetadata(parsed);
   renderMetadataSourceButtons();
-  saveWorkingJsonButton.focus();
-  setStatus("Working metadata is now active.");
+  setStatus(statusMessage);
 }
 
 async function clearWorkingJson() {
@@ -270,6 +283,34 @@ document.getElementById("useSavedProfileButton").addEventListener("click", () =>
 
 document.getElementById("clearWorkingJsonButton").addEventListener("click", () => {
   clearWorkingJson().catch((error) => setStatus(error.message));
+});
+
+workingJsonEditor.addEventListener("blur", () => {
+  const raw = workingJsonEditor.value.trim();
+  if (!raw) return;
+
+  try {
+    const parsed = JSON.parse(raw);
+    if (!isPlainObject(parsed)) return;
+    applyWorkingJson(parsed, "Working JSON updated.").catch((error) => setStatus(error.message));
+  } catch {
+    // Leave invalid JSON for manual correction.
+  }
+});
+
+workingJsonEditor.addEventListener("paste", () => {
+  window.setTimeout(() => {
+    const raw = workingJsonEditor.value.trim();
+    if (!raw) return;
+
+    try {
+      const parsed = JSON.parse(raw);
+      if (!isPlainObject(parsed)) return;
+      applyWorkingJson(parsed, "Working JSON pasted and activated.").catch((error) => setStatus(error.message));
+    } catch {
+      // Ignore invalid paste content until the user saves explicitly.
+    }
+  }, 0);
 });
 
 document.getElementById("loadSampleButton").addEventListener("click", () => {
