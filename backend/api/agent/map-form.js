@@ -5,13 +5,241 @@ import {
   json,
   normalizeText,
   profileAtomsFromProfile,
+  semanticConceptForPath,
   setCorsHeaders,
-  supabaseRpc
+  supabaseRpc,
+  supabaseSelectRows
 } from "../_lib/semantic-profile.js";
+import { generateJsonWithGemini, isGeminiConfigured } from "../_lib/gemini.js";
 
 const DEFAULT_MATCH_COUNT = 5;
 const DEFAULT_MAX_DISTANCE = 0.42;
 const HTML_SNIPPET_LIMIT = 12000;
+const LLM_MAPPING_CONFIDENCE = 0.78;
+
+const PROFILE_SCHEMA = {
+  firstName: "A person's first or given name.",
+  lastName: "A person's last name, surname, or family name.",
+  name: "A person's full name.",
+  email: "An email address.",
+  phone: "A phone or mobile number.",
+  company: "A company, organization, employer, or account name.",
+  jobTitle: "A person's work role, position, designation, or title.",
+  address: "A street or mailing address.",
+  city: "A city, town, locality, or business market location.",
+  state: "A state, province, region, or sales territory.",
+  postalCode: "A postal code, ZIP code, postcode, or delivery zone.",
+  country: "A country, nation, or geographic country-level value.",
+  linkedin: "A LinkedIn profile URL.",
+  website: "A website, homepage, portfolio, or company site URL.",
+  preferredContactMethod: "The preferred contact, outreach, or follow-up channel.",
+  notes: "Freeform notes, comments, message, memo, or contextual details.",
+  acceptTerms: "A consent, agreement, opt-in, privacy, or terms checkbox value."
+};
+
+function normalizeChoice(text) {
+  return normalizeText(text);
+}
+
+function setNestedValue(target, path, value) {
+  const segments = String(path || "").split(".").filter(Boolean);
+  if (segments.length === 0) return;
+
+  let current = target;
+  while (segments.length > 1) {
+    const segment = segments.shift();
+    if (!current[segment] || typeof current[segment] !== "object" || Array.isArray(current[segment])) {
+      current[segment] = {};
+    }
+    current = current[segment];
+  }
+
+  current[segments[0]] = value;
+}
+
+function profileFromAtoms(atoms) {
+  const profile = {};
+  for (const atom of atoms || []) {
+    if (!atom?.semanticPath || atom.rawValue === undefined || atom.rawValue === null || atom.rawValue === "") {
+      continue;
+    }
+    setNestedValue(profile, atom.semanticPath, atom.rawValue);
+  }
+  return profile;
+}
+
+function buildProfileAtomOptions(atoms, limit = 60) {
+  return (atoms || []).slice(0, limit).map((atom) => ({
+    semanticPath: atom.semanticPath,
+    rawValue: atom.rawValue,
+    concept: semanticConceptForPath(atom.semanticPath)
+  }));
+}
+
+function resolveAtomChoice(choice, atoms) {
+  const normalizedChoice = normalizeChoice(choice);
+  if (!normalizedChoice) return null;
+
+  return (atoms || []).find((atom) => {
+    const semanticPath = normalizeChoice(atom.semanticPath);
+    const rawValue = normalizeChoice(atom.rawValue);
+    const leaf = normalizeChoice(String(atom.semanticPath || "").split(".").pop() || "");
+    return (
+      semanticPath === normalizedChoice ||
+      rawValue === normalizedChoice ||
+      leaf === normalizedChoice
+    );
+  }) || null;
+}
+
+function mappingFromAtom(field, atom, confidence = LLM_MAPPING_CONFIDENCE) {
+  if (!atom || !candidateCompatible(field, atom)) return null;
+
+  return {
+    key: atom.semanticPath,
+    semanticPath: atom.semanticPath,
+    value: atom.rawValue,
+    confidence: clamp(confidence),
+    method: "llm",
+    reasons: [`Gemini resolved the field to stored profile atom ${atom.semanticPath}`],
+    reviewRequired: confidence < 0.8
+  };
+}
+
+async function loadProfileAtoms(body, userId) {
+  if (userId) {
+    const rows = await supabaseSelectRows("profile_atoms", {
+      select: "semantic_path,raw_value,embedding_text",
+      user_id: `eq.${userId}`,
+      order: "semantic_path.asc"
+    });
+
+    return Array.isArray(rows)
+      ? rows
+          .map((row) => ({
+            semanticPath: String(row.semantic_path || ""),
+            rawValue: String(row.raw_value || ""),
+            embeddingText: String(row.embedding_text || "")
+          }))
+          .filter((atom) => atom.semanticPath && atom.rawValue)
+      : [];
+  }
+
+  if (body?.profile && typeof body.profile === "object" && !Array.isArray(body.profile)) {
+    return profileAtomsFromProfile(body.profile);
+  }
+
+  return [];
+}
+
+function buildLlmResolutionPrompt(body, fields, mappings, profileAtoms, sourceLabel) {
+  const unresolvedFields = mappings
+    .filter((entry) => !entry.mapping || entry.mapping.reviewRequired)
+    .map((entry) => ({
+      label: entry.field.label,
+      selector: entry.field.selector,
+      type: entry.field.type,
+      name: entry.field.name,
+      placeholder: entry.field.placeholder,
+      options: entry.field.options,
+      candidates: entry.candidates,
+      currentMapping: entry.mapping
+        ? {
+            key: entry.mapping.key,
+            semanticPath: entry.mapping.semanticPath,
+            value: entry.mapping.value,
+            confidence: entry.mapping.confidence
+          }
+        : null
+    }));
+
+  return {
+    goal: body?.goal || "Fill this page with the active Curion metadata.",
+    sourceLabel,
+    url: body?.url || "",
+    title: body?.title || "",
+    htmlSnippet: body?.html ? String(body.html).slice(0, HTML_SNIPPET_LIMIT) : "",
+    fields,
+    unresolvedFields,
+    alreadyMappedFields: mappings
+      .filter((entry) => entry.mapping)
+      .map((entry) => ({
+        label: entry.field.label,
+        semanticPath: entry.mapping.semanticPath,
+        rawValue: entry.mapping.value,
+        confidence: entry.mapping.confidence,
+        method: entry.mapping.method
+      })),
+    alreadyMappedValues: Object.fromEntries(
+      mappings.filter((entry) => entry.mapping).map((entry) => [entry.field.label, entry.mapping.value])
+    ),
+    availableProfileOptions: buildProfileAtomOptions(profileAtoms.filter((atom) => atom.rawValue)),
+    profileSchema: PROFILE_SCHEMA,
+    profileAtoms: buildProfileAtomOptions(profileAtoms, 80),
+    profileObject: profileFromAtoms(profileAtoms)
+  };
+}
+
+async function applyLlmFallback(body, fields, mappings, source, userId, extractionReport, warnings) {
+  if (!isGeminiConfigured()) {
+    return { mappings, source, warnings };
+  }
+
+  const profileAtoms = await loadProfileAtoms(body, userId);
+  if (profileAtoms.length === 0) {
+    return { mappings, source, warnings };
+  }
+
+  const shouldUseLlm =
+    mappings.some((entry) => !entry.mapping || entry.mapping.reviewRequired) ||
+    summarize(mappings, extractionReport, source, warnings).overallConfidence < 0.78;
+
+  if (!shouldUseLlm) {
+    return { mappings, source, warnings };
+  }
+
+  const prompt = buildLlmResolutionPrompt(body, fields, mappings, profileAtoms, source);
+
+  try {
+    const content = await generateJsonWithGemini(
+      [
+        "You resolve low-confidence HTML form fields using stored profile atoms.",
+        "Return strict JSON where each key is an exact unresolved field label and each value is the exact semanticPath of the best matching profile atom.",
+        "Only use semanticPath values from the availableProfileOptions list.",
+        "Prefer unused profile atoms unless the form clearly repeats information.",
+        "Only map a field when the fit is clear.",
+        "Never invent values; map fields to stored profile atoms only."
+      ].join(" "),
+      prompt
+    );
+
+    const parsed = JSON.parse(content);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      throw new Error("Gemini response was not a JSON object");
+    }
+
+    const byLabel = new Map(mappings.map((entry) => [entry.field.label, entry]));
+    for (const [fieldLabel, chosenValue] of Object.entries(parsed)) {
+      const entry = byLabel.get(fieldLabel);
+      if (!entry) continue;
+
+      const atom = resolveAtomChoice(chosenValue, profileAtoms);
+      const mapping = mappingFromAtom(entry.field, atom, LLM_MAPPING_CONFIDENCE);
+      if (!mapping) continue;
+      entry.mapping = mapping;
+    }
+
+    warnings.push("Gemini resolved low-confidence fields using stored profile atoms");
+    return {
+      mappings,
+      source: `${source}+llm`,
+      warnings
+    };
+  } catch (error) {
+    warnings.push(`Gemini fallback failed: ${error.message || "unknown error"}`);
+    return { mappings, source, warnings };
+  }
+}
 
 function sanitizeField(field, index) {
   const type = String(field?.type || "text").toLowerCase();
@@ -327,12 +555,81 @@ function mapWithTransientProfile({ fields, fieldEmbeddings, profile, extractionR
   });
 }
 
+function buildMappingConfidenceReport(mappings, extractionReport) {
+  const fieldReports = mappings.map((entry) => {
+    const extractionScore =
+      extractionReport.fieldReports.find((fieldReport) => fieldReport.selector === entry.field.selector)?.score || 0;
+
+    if (!entry.mapping) {
+      return {
+        label: entry.field.label,
+        selector: entry.field.selector,
+        score: clamp(0.25 + extractionScore * 0.2),
+        extractionScore,
+        method: "unmapped",
+        reasons: [],
+        weaknesses: ["No confident mapping was found"],
+        candidateScores: (entry.candidates || []).map((candidate) => ({
+          key: candidate.semanticPath,
+          score: candidate.confidence
+        })),
+        shouldUseLLM: true
+      };
+    }
+
+    const score = clamp(entry.mapping.confidence * 0.72 + extractionScore * 0.28);
+    const shouldUseLLM = score < 0.75 || entry.mapping.reviewRequired;
+
+    return {
+      label: entry.field.label,
+      selector: entry.field.selector,
+      score,
+      extractionScore,
+      method: entry.mapping.method,
+      mappedKey: entry.mapping.key,
+      mappedValue: entry.mapping.value,
+      reasons: entry.mapping.reasons || [],
+      weaknesses: entry.mapping.reviewRequired ? ["Backend marked this field for review"] : [],
+      candidateScores: (entry.candidates || []).map((candidate) => ({
+        key: candidate.semanticPath,
+        score: candidate.confidence
+      })),
+      shouldUseLLM
+    };
+  });
+
+  const overallScore = clamp(
+    fieldReports.reduce((sum, report) => sum + report.score, 0) / Math.max(fieldReports.length, 1)
+  );
+  const unresolvedCount = fieldReports.filter((report) => report.method === "unmapped").length;
+  const lowConfidenceCount = fieldReports.filter((report) => report.shouldUseLLM).length;
+  const reasons = [];
+
+  if (overallScore < 0.76) reasons.push("Average mapping confidence is below the trust threshold");
+  if (unresolvedCount > 0) reasons.push("Some fields remain unresolved");
+  if (lowConfidenceCount / Math.max(fieldReports.length, 1) >= 0.3) {
+    reasons.push("A large portion of fields have weak mapping confidence");
+  }
+
+  return {
+    overallScore,
+    shouldUseLLM:
+      unresolvedCount > 0 ||
+      overallScore < 0.76 ||
+      lowConfidenceCount / Math.max(fieldReports.length, 1) >= 0.3,
+    reasons,
+    fieldReports,
+    unresolvedCount
+  };
+}
+
 function summarize(mappings, extractionReport, source, warnings = []) {
   const mapped = mappings.filter((entry) => entry.mapping);
   const mappedCount = mapped.length;
   const mappingAverage =
     mapped.reduce((sum, entry) => sum + entry.mapping.confidence, 0) / Math.max(mappedCount, 1);
   const overallConfidence = clamp(mappingAverage * 0.76 + extractionReport.overallScore * 0.24);
+  const mappingReport = buildMappingConfidenceReport(mappings, extractionReport);
 
   return {
     source,
@@ -343,6 +640,7 @@ function summarize(mappings, extractionReport, source, warnings = []) {
       overallConfidence < 0.8 ||
       mappings.some((entry) => !entry.mapping || entry.mapping.reviewRequired),
     extractionReport,
+    mappingReport,
     warnings,
     mappings
   };
@@ -397,6 +695,18 @@ export default async function handler(request, response) {
     } else {
       throw new Error("userId is required unless a transient profile object is supplied");
     }
+
+    const llmResult = await applyLlmFallback(
+      body,
+      fields,
+      mappings,
+      source,
+      userId,
+      extractionReport,
+      warnings
+    );
+    mappings = llmResult.mappings;
+    source = llmResult.source;
 
     json(response, 200, summarize(mappings, extractionReport, source, warnings));
   } catch (error) {

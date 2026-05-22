@@ -7,7 +7,7 @@ import { extractFormFields } from "./browser/extractFormFields";
 import { fillForm } from "./browser/fillForm";
 import { openPage } from "./browser/openPage";
 import { loadUserProfile, resolveProfilePath } from "./config/userProfile";
-import { mapFieldsWithConfidence } from "./llm/mapFields";
+import { mapFieldsWithBackend } from "./backend/mapForm";
 
 async function waitForReview(): Promise<void> {
   const rl = readline.createInterface({ input, output });
@@ -42,6 +42,10 @@ function resolveTarget(inputUrl?: string): string {
   return pathToFileURL(localPath).toString();
 }
 
+function formatConfidence(value: number | undefined): string {
+  return Number((value ?? 0).toFixed(2)).toFixed(2);
+}
+
 async function main(): Promise<void> {
   const rawTarget = process.argv[2];
   const rawProfilePath = process.argv[3];
@@ -61,7 +65,6 @@ async function main(): Promise<void> {
       extractionSource,
       report: extractionReport,
       htmlAdequacyReport,
-      deferredLlmExtraction,
     } = await extractFormFields(page);
     console.log(`Field extraction source: ${extractionSource}`);
     console.log(`Extraction confidence: ${extractionReport.overallScore.toFixed(2)}`);
@@ -78,16 +81,24 @@ async function main(): Promise<void> {
       }))
     );
 
-    const {
-      mappedValues,
-      report: mappingReport,
-      fields,
-    } = await mapFieldsWithConfidence(extractedFields, profile, extractionReport, {
-      formContext,
-      page,
-      deferredLlmExtraction,
+    const backendResult = await mapFieldsWithBackend({
+      fields: extractedFields,
+      profile,
+      goal: formContext ? `Fill this page with the ${formContext}.` : "Fill this page with the active Curion metadata.",
+      url,
+      title: rawTarget || "Form",
+      html: await page.content(),
     });
-    console.log(`Mapping confidence: ${mappingReport.overallScore.toFixed(2)}`);
+    const mappedValues = backendResult.mappedValues;
+    const fields = extractedFields;
+    const mappingSource = backendResult.analysis.source || "backend";
+    const mappingConfidence =
+      backendResult.analysis.mappingReport?.overallScore ??
+      backendResult.analysis.overallConfidence ??
+      0;
+
+    console.log(`Mapping source: ${mappingSource}`);
+    console.log(`Mapping confidence: ${formatConfidence(mappingConfidence)}`);
     console.log("Mapped values:");
     console.table(mappedValues);
 

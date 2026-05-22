@@ -5,7 +5,7 @@ Recommended host: Vercel.
 Current production URL:
 
 ```text
-https://frontend-six-omega-77.vercel.app
+https://curion.sbs
 ```
 
 ## Project Settings
@@ -32,13 +32,13 @@ npx vercel --prod
 
 ## Custom Domain
 
-After buying `curion.website`, add it in the Vercel project under:
+After buying `curion.sbs`, add it in the Vercel project under:
 
-`Settings -> Domains -> Add curion.website`
+`Settings -> Domains -> Add curion.sbs`
 
 Then update DNS at the domain registrar using the records Vercel shows. Typical Vercel records are:
 
-- Apex/root domain `curion.website`: `A` record to `76.76.21.21`
-- `www.curion.website`: `CNAME` record to `cname.vercel-dns.com`
+- Apex/root domain `curion.sbs`: `A` record to `76.76.21.21`
+- `www.curion.sbs`: `CNAME` record to `cname.vercel-dns.com`
 
 Use the exact DNS records shown in your Vercel dashboard if they differ.

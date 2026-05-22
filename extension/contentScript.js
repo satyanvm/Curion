@@ -1,22 +1,4 @@
-const PROFILE_SCHEMA = {
-  firstName: ["first name", "given name", "forename"],
-  lastName: ["last name", "surname", "family name"],
-  name: ["full name", "your name", "contact name", "applicant", "candidate", "primary contact"],
-  email: ["email", "e-mail", "inbox", "mail"],
-  phone: ["phone", "mobile", "telephone", "tel", "line", "whatsapp"],
-  company: ["company", "organization", "organisation", "employer", "account"],
-  jobTitle: ["job title", "role", "designation", "position", "seat", "title"],
-  address: ["address", "street", "base", "mailing"],
-  city: ["city", "town", "market", "locality"],
-  state: ["state", "province", "region", "territory"],
-  postalCode: ["zip", "postal", "postcode", "pin", "zone"],
-  country: ["country", "nation", "geo"],
-  linkedin: ["linkedin", "profile"],
-  website: ["website", "portfolio", "homepage", "source", "site"],
-  preferredContactMethod: ["preferred contact", "contact method", "reach", "next touch", "channel"],
-  notes: ["notes", "message", "comments", "context", "additional info"],
-  acceptTerms: ["terms", "privacy", "agree", "consent", "ok to proceed"]
-};
+const DEFAULT_API_URL = "https://backend-three-mu-84.vercel.app/api/agent/map-form";
 
 function normalize(text) {
   return String(text || "")
@@ -45,77 +27,15 @@ function labelizeKey(key) {
     .replace(/[_-]+/g, " ");
 }
 
-function metadataEntries(metadata, prefix = "") {
+function metadataEntries(metadata) {
   if (!metadata || typeof metadata !== "object") return [];
 
-  return Object.entries(metadata).flatMap(([key, value]) => {
-    const path = prefix ? `${prefix}.${key}` : key;
+  return Object.values(metadata).flatMap((value) => {
     if (value && typeof value === "object" && !Array.isArray(value)) {
-      return metadataEntries(value, path);
+      return metadataEntries(value);
     }
     if (value === undefined || value === null || value === "") return [];
-    return [{
-      key: path,
-      label: labelizeKey(path),
-      value: Array.isArray(value) ? value.join(", ") : String(value)
-    }];
-  });
-}
-
-function profileSchemaKeyForEntry(entry) {
-  const segments = String(entry.key || "").split(".");
-  const lastSegment = segments[segments.length - 1];
-  return Object.prototype.hasOwnProperty.call(PROFILE_SCHEMA, lastSegment) ? lastSegment : "";
-}
-
-function splitNameParts(name) {
-  const parts = String(name || "").trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return {};
-  if (parts.length === 1) return { firstName: parts[0] };
-  return {
-    firstName: parts.slice(0, -1).join(" "),
-    lastName: parts[parts.length - 1]
-  };
-}
-
-function derivedNameEntries(entry) {
-  if (profileSchemaKeyForEntry(entry) !== "name") return [];
-
-  const parts = splitNameParts(entry.value);
-  const baseKey = entry.key.replace(/(^|.)name$/, (match, prefix) => `${prefix}`);
-  const baseLabel = entry.label.replace(/\bname\b/i, "").replace(/\s+/g, " ").trim();
-
-  return [
-    parts.firstName
-      ? {
-          key: `${baseKey}firstName`,
-          label: `${baseLabel ? `${baseLabel} ` : ""}first name`,
-          value: parts.firstName
-        }
-      : null,
-    parts.lastName
-      ? {
-          key: `${baseKey}lastName`,
-          label: `${baseLabel ? `${baseLabel} ` : ""}last name`,
-          value: parts.lastName
-        }
-      : null
-  ].filter(Boolean);
-}
-
-function profileCandidates(profile) {
-  return metadataEntries(profile).flatMap((entry) => [entry, ...derivedNameEntries(entry)]).map((entry) => {
-    const schemaKey = profileSchemaKeyForEntry(entry);
-    return {
-      ...entry,
-      schemaKey,
-      aliases: Array.from(new Set([
-        entry.key,
-        entry.label,
-        schemaKey,
-        ...(schemaKey ? PROFILE_SCHEMA[schemaKey] : [])
-      ].filter(Boolean)))
-    };
+    return [value];
   });
 }
 
@@ -249,10 +169,6 @@ function isUrlField(field) {
   return field.type === "url" || /(^| )(linkedin|website|portfolio|homepage|url)( |$)/.test(text);
 }
 
-function isSelectField(field) {
-  return field.type === "select";
-}
-
 function keyLooksLike(key, expected) {
   return normalize(labelizeKey(key)).split(" ").includes(expected);
 }
@@ -279,164 +195,6 @@ function mappingCompatibleWithField(field, mapping) {
   return true;
 }
 
-function mappingFromCandidate(field, candidate, confidence, method) {
-  const mapping = {
-    key: candidate.key,
-    value: String(candidate.value),
-    confidence,
-    method
-  };
-  return mappingCompatibleWithField(field, mapping) ? mapping : null;
-}
-
-function ruleBasedValueForField(field, candidates) {
-  const haystack = normalize([field.label, field.name, field.placeholder].join(" "));
-  const relationalNameTerms = ["mother", "father", "parent", "guardian", "spouse", "wife", "husband"];
-  let bestCandidate = null;
-  let bestKey = "";
-  let bestScore = 0;
-
-  for (const [key, hints] of Object.entries(PROFILE_SCHEMA)) {
-    const score = hints.reduce((total, hint) => {
-      return total + (haystack.includes(normalize(hint)) ? 1 : 0);
-    }, 0);
-    const candidate = candidates.find((entry) => entry.schemaKey === key || entry.key === key);
-
-    if (score > bestScore && candidate) {
-      bestKey = key;
-      bestCandidate = candidate;
-      bestScore = score;
-    }
-  }
-
-  if (!bestKey) {
-    for (const entry of candidates) {
-      if (
-        containsAny(haystack, relationalNameTerms) &&
-        normalize(entry.label).split(" ").includes("name") &&
-        !containsAny(entry.label, relationalNameTerms)
-      ) {
-        continue;
-      }
-
-      const keyScore = normalize(entry.label)
-        .split(" ")
-        .filter((token) => token.length > 1 && haystack.includes(token)).length;
-
-      if (keyScore > bestScore) {
-        bestKey = entry.key;
-        bestCandidate = entry;
-        bestScore = keyScore;
-      }
-    }
-  }
-
-  if (!bestCandidate) return null;
-  if (
-    bestKey === "name" &&
-    containsAny(haystack, relationalNameTerms) &&
-    !containsAny(labelizeKey(bestKey), relationalNameTerms)
-  ) {
-    return null;
-  }
-
-  return mappingFromCandidate(field, bestCandidate, Math.min(0.96, 0.62 + bestScore * 0.12), "rule");
-}
-
-function tokenOverlapScore(fieldTokens, aliasTokens) {
-  if (!fieldTokens.length || !aliasTokens.length) return 0;
-  const overlapCount = aliasTokens.filter((token) => fieldTokens.includes(token)).length;
-  return overlapCount ? overlapCount / aliasTokens.length : 0;
-}
-
-function typeCompatibilityBoost(field, candidate) {
-  if (isEmailField(field) && candidate.schemaKey === "email") return 0.45;
-  if (isPhoneField(field) && candidate.schemaKey === "phone") return 0.45;
-  if (isUrlField(field) && ["linkedin", "website"].includes(candidate.schemaKey)) return 0.35;
-  if (isSelectField(field) && ["country", "preferredContactMethod"].includes(candidate.schemaKey)) return 0.25;
-  return 0;
-}
-
-function optionBoost(field, candidate) {
-  if (!isSelectField(field) || !field.options?.length) return 0;
-  return field.options.some((option) => normalize(option) === normalize(candidate.value)) ? 0.35 : 0;
-}
-
-function semanticScoreCandidate(field, candidate) {
-  const compatibleMapping = mappingCompatibleWithField(field, candidate);
-  if (!compatibleMapping) return 0;
-
-  const fieldMeaning = normalize([
-    field.label,
-    field.name,
-    field.placeholder,
-    field.type,
-    ...(field.options || [])
-  ].join(" "));
-  const fieldTokens = fieldMeaning.split(" ").filter(Boolean);
-  let score = 0;
-
-  for (const alias of candidate.aliases) {
-    const normalizedAlias = normalize(alias);
-    if (!normalizedAlias) continue;
-
-    if (fieldMeaning === normalizedAlias) {
-      score = Math.max(score, 0.95);
-      continue;
-    }
-
-    if (fieldMeaning.includes(normalizedAlias)) {
-      score = Math.max(score, normalizedAlias.includes(" ") ? 0.88 : 0.76);
-    }
-
-    score = Math.max(
-      score,
-      0.7 * tokenOverlapScore(fieldTokens, normalizedAlias.split(" ").filter(Boolean))
-    );
-  }
-
-  return Math.max(0, Math.min(1, score + typeCompatibilityBoost(field, candidate) + optionBoost(field, candidate)));
-}
-
-function semanticValueForField(field, candidates) {
-  const ranked = candidates
-    .map((candidate) => ({
-      candidate,
-      score: semanticScoreCandidate(field, candidate)
-    }))
-    .sort((left, right) => right.score - left.score);
-  const best = ranked[0];
-  const runnerUp = ranked[1];
-
-  if (!best || best.score < 0.82) return null;
-  const gap = runnerUp ? best.score - runnerUp.score : best.score;
-  if (gap < 0.12) return null;
-
-  return mappingFromCandidate(field, best.candidate, Math.min(0.96, best.score), "semantic");
-}
-
-function profileValueForField(field, candidates) {
-  return semanticValueForField(field, candidates);
-}
-
-function analyze(profile) {
-  const fields = extractFields();
-  const candidates = profileCandidates(profile);
-  const mappings = fields.map((field) => ({
-    field,
-    mapping: profileValueForField(field, candidates)
-  }));
-
-  const mappedCount = mappings.filter((entry) => entry.mapping).length;
-  return {
-    url: window.location.href,
-    title: document.title,
-    fieldCount: fields.length,
-    mappedCount,
-    mappings
-  };
-}
-
 function fieldLooksRich(field) {
   return ["textarea", "select", "checkbox", "radio"].includes(field.type);
 }
@@ -460,7 +218,15 @@ function hasProfile(profile) {
   return metadataEntries(profile).length > 0;
 }
 
+function resolveMetadataSource(settings) {
+  const source = String(settings?.curionMetadataSource || "");
+  if (source === "saved" || source === "working") return source;
+  return hasProfile(settings?.curionWorkingMetadata) ? "working" : "saved";
+}
+
 function activeProfileFromSettings(settings) {
+  const source = resolveMetadataSource(settings);
+  if (source === "saved") return settings.curionProfile || {};
   return hasProfile(settings.curionWorkingMetadata)
     ? settings.curionWorkingMetadata
     : settings.curionProfile || {};
@@ -474,6 +240,82 @@ function collectPageSnapshot() {
     html: document.documentElement.outerHTML,
     fields,
     fieldCount: fields.length
+  };
+}
+
+function usingStoredBackendProfile(settings) {
+  return Boolean(
+    settings?.curionUseBackendProfile &&
+      String(settings?.curionUserId || "").trim() &&
+      String(settings?.curionApiUrl || DEFAULT_API_URL).trim()
+  );
+}
+
+async function analyzeWithStoredBackendProfile(settings, profileOverride = null) {
+  const apiUrl = String(settings?.curionApiUrl || DEFAULT_API_URL).trim();
+  const userId = String(settings?.curionUserId || "").trim();
+  if (!apiUrl) return null;
+
+  const pageSnapshot = collectPageSnapshot();
+  const activeProfile = profileOverride && hasProfile(profileOverride)
+    ? profileOverride
+    : activeProfileFromSettings(settings);
+  const requestBody = {
+    goal: "Fill this page with the active Curion metadata.",
+    ...pageSnapshot
+  };
+
+  if (settings?.curionUseBackendProfile && userId) {
+    requestBody.userId = userId;
+  } else if (hasProfile(activeProfile)) {
+    requestBody.profile = activeProfile;
+  } else {
+    return null;
+  }
+
+  const response = await fetch(apiUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(requestBody)
+  });
+
+  if (!response.ok) {
+    throw new Error(`Backend mapping failed with status ${response.status}`);
+  }
+
+  const responsePayload = await response.json();
+  return {
+    ...responsePayload,
+    title: responsePayload?.title || document.title,
+    fieldCount: Number(responsePayload?.fieldCount || pageSnapshot.fieldCount || 0),
+    mappedCount: Number(responsePayload?.mappedCount || 0),
+    mappings: Array.isArray(responsePayload?.mappings) ? responsePayload.mappings : []
+  };
+}
+
+async function fillWithBackendProfile(settings, profileOverride = null) {
+  const analysis = await analyzeWithStoredBackendProfile(settings, profileOverride);
+  if (!analysis) {
+    return {
+      fieldCount: 0,
+      mappedCount: 0,
+      mappings: [],
+      filledCount: 0
+    };
+  }
+
+  const result = fillReturnedMappings(analysis.mappings || []);
+  const submitMode = settings?.curionSubmitMode || "review";
+
+  if (submitMode === "direct" && result.filledCount > 0) {
+    result.submit = submitBestForm();
+  }
+
+  return {
+    ...analysis,
+    ...result
   };
 }
 
@@ -526,25 +368,6 @@ function clearControl(control) {
   control.dispatchEvent(new Event("change", { bubbles: true }));
 }
 
-function fillMappedFields(profile) {
-  const controls = getControls();
-  const analysis = analyze(profile);
-  let filledCount = 0;
-
-  for (const entry of analysis.mappings) {
-    if (!entry.mapping) continue;
-    const control = controls[entry.field.index];
-    if (!control) continue;
-    fillControl(control, entry.mapping.value);
-    filledCount += 1;
-  }
-
-  return {
-    ...analysis,
-    filledCount
-  };
-}
-
 function fillReturnedMappings(mappings) {
   const controls = getControls();
   let filledCount = 0;
@@ -567,6 +390,18 @@ function fillReturnedMappings(mappings) {
   return {
     filledCount
   };
+}
+
+async function readBackendSettings() {
+  return chrome.storage.local.get([
+    "curionProfile",
+    "curionWorkingMetadata",
+    "curionMetadataSource",
+    "curionApiUrl",
+    "curionUserId",
+    "curionUseBackendProfile",
+    "curionSubmitMode"
+  ]);
 }
 
 function unfillPage() {
@@ -614,30 +449,22 @@ function submitBestForm() {
   return { submitted: true };
 }
 
-function fillAndMaybeSubmit(profile, submitMode) {
-  const result = fillMappedFields(profile);
-  if (submitMode === "direct" && result.filledCount > 0) {
-    return {
-      ...result,
-      submit: submitBestForm()
-    };
-  }
-  return result;
-}
-
 let autoFillTimer = null;
 let lastAutoFillSignature = "";
 let autoFillPausedForPage = false;
 let curionPrompt = null;
 let lastPromptSignature = "";
 
-function buildAutoFillSignature(profile) {
+function buildAutoFillSignature(profile, settings) {
   const controls = getControls();
   return JSON.stringify({
     href: window.location.href,
     fieldCount: controls.length,
     labels: controls.slice(0, 40).map(labelFor),
-    profileKeys: Object.keys(profile || {}).filter((key) => String(profile[key] || "").trim()).sort()
+    profileKeys: Object.keys(profile || {}).filter((key) => String(profile[key] || "").trim()).sort(),
+    metadataSource: resolveMetadataSource(settings),
+    useBackendProfile: usingStoredBackendProfile(settings),
+    userId: String(settings?.curionUserId || "").trim()
   });
 }
 
@@ -831,20 +658,24 @@ function renderCurionPrompt(analysis, message) {
   primary.disabled = analysis.mappedCount === 0;
 
   primary.addEventListener("click", async () => {
-    const stored = await chrome.storage.local.get([
-      "curionProfile",
-      "curionWorkingMetadata",
-      "curionSubmitMode"
-    ]);
-    const profile = activeProfileFromSettings(stored);
-    const result = fillAndMaybeSubmit(profile, stored.curionSubmitMode || "review");
-    const remaining = Math.max(0, result.fieldCount - result.filledCount);
-    const skipped = unmappedLabels(result);
+    const stored = await readBackendSettings();
+    const submitMode = stored.curionSubmitMode || "review";
+    const result = analysis?.source
+      ? fillReturnedMappings(analysis.mappings || [])
+      : await fillWithBackendProfile(stored);
+
+    if (analysis?.source && submitMode === "direct" && result.filledCount > 0) {
+      result.submit = submitBestForm();
+    }
+
+    const totalFields = Number(result.fieldCount || analysis.fieldCount || 0);
+    const remaining = Math.max(0, totalFields - result.filledCount);
+    const skipped = analysis?.source ? unmappedLabels(analysis) : unmappedLabels(result);
 
     messageElement.textContent = remaining
       ? `Curion filled ${result.filledCount} ${pluralize(result.filledCount, "field")}. ${remaining} ${pluralize(remaining, "field")} need your input.`
       : `Curion filled all ${result.filledCount} matched ${pluralize(result.filledCount, "field")}.`;
-    fieldsElement.textContent = `${result.fieldCount} ${pluralize(result.fieldCount, "field")}`;
+    fieldsElement.textContent = `${totalFields} ${pluralize(totalFields, "field")}`;
     matchesElement.textContent = `${result.filledCount} filled`;
     primary.textContent = "Done";
     primary.disabled = true;
@@ -876,18 +707,24 @@ async function maybeAutoFill() {
     "curionAutoFillEnabled",
     "curionProfile",
     "curionWorkingMetadata",
+    "curionMetadataSource",
+    "curionApiUrl",
+    "curionUserId",
+    "curionUseBackendProfile",
     "curionSubmitMode"
   ]);
 
   if (!stored.curionAutoFillEnabled) return;
   const profile = activeProfileFromSettings(stored);
-  if (!hasProfile(profile) || getControls().length === 0) return;
+  if (!String(stored.curionApiUrl || DEFAULT_API_URL).trim()) return;
+  if (!usingStoredBackendProfile(stored) && !hasProfile(profile)) return;
+  if (getControls().length === 0) return;
 
-  const signature = buildAutoFillSignature(profile);
+  const signature = buildAutoFillSignature(profile, stored);
   if (signature === lastAutoFillSignature) return;
   lastAutoFillSignature = signature;
 
-  const analysis = analyze(profile);
+  const analysis = await analyzeWithStoredBackendProfile(stored, profile);
   if (!shouldOfferAutoFill(analysis)) {
     removeCurionPrompt();
     return;
@@ -929,12 +766,27 @@ observer.observe(document.documentElement, {
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message?.type === "CURION_ANALYZE") {
-    sendResponse(analyze(message.profile || {}));
+    readBackendSettings()
+      .then((settings) => analyzeWithStoredBackendProfile(settings, message.profile || {}))
+      .then((analysis) => sendResponse(analysis || {
+        url: window.location.href,
+        title: document.title,
+        fieldCount: getControls().length,
+        mappedCount: 0,
+        mappings: []
+      }))
+      .catch((error) => sendResponse({ error: error?.message || "Backend mapping failed" }));
     return true;
   }
 
   if (message?.type === "CURION_FILL") {
-    sendResponse(fillAndMaybeSubmit(message.profile || {}, message.submitMode || "review"));
+    readBackendSettings()
+      .then((settings) => fillWithBackendProfile(
+        { ...settings, curionSubmitMode: message.submitMode || settings.curionSubmitMode || "review" },
+        message.profile || {}
+      ))
+      .then(sendResponse)
+      .catch((error) => sendResponse({ error: error?.message || "Backend fill failed", filledCount: 0 }));
     return true;
   }
 

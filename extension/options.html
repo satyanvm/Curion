@@ -9,7 +9,7 @@
   <body>
     <main class="options-shell">
       <header>
-        <a class="brand" href="https://frontend-six-omega-77.vercel.app" target="_blank" rel="noreferrer">
+        <a class="brand" href="https://curion.sbs" target="_blank" rel="noreferrer">
           <span class="brand-mark">C</span>
           <span>Curion</span>
         </a>
@@ -30,6 +30,14 @@
                 <option value="review">Ask for review before submit</option>
                 <option value="direct">Directly submit after filling</option>
               </select>
+            </label>
+            <label>
+              Backend profile user ID
+              <input id="userIdInput" autocomplete="off" placeholder="user_123" />
+            </label>
+            <label class="check-row">
+              <input id="backendProfileInput" type="checkbox" />
+              Use stored backend vector profile for scans
             </label>
           </fieldset>
 
@@ -54,6 +62,7 @@
           </label>
           <div class="form-actions">
             <button class="primary" type="submit">Save profile</button>
+            <button id="syncBackendButton" type="button">Sync to backend</button>
             <button id="loadSampleButton" type="button">Load sample</button>
             <button id="exportJsonButton" type="button">Export JSON</button>
             <label class="import-button">
@@ -76,7 +85,8 @@
           </div>
           <textarea id="workingJsonEditor" spellcheck="false" placeholder='{"lead":{"name":"Jane Doe","email":"jane@example.com"}}'></textarea>
           <div class="json-actions">
-            <button id="saveWorkingJsonButton" class="primary" type="button">Use working JSON</button>
+            <button id="saveWorkingJsonButton" type="button">Use working JSON</button>
+            <button id="useSavedProfileButton" type="button">Use saved profile</button>
             <button id="clearWorkingJsonButton" type="button">Clear working JSON</button>
           </div>
           <p id="status" aria-live="polite"></p>
