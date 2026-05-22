@@ -10,7 +10,7 @@ const SAMPLE_PROFILE = {
   postalCode: "560001",
   country: "India",
   linkedin: "https://www.linkedin.com/in/satyanvm/",
-  website: "https://frontend-six-omega-77.vercel.app",
+  website: "https://curion.sbs",
   preferredContactMethod: "Email",
   notes: "Curion profile for filling repetitive forms with review.",
   acceptTerms: "yes"
@@ -22,11 +22,16 @@ const form = document.getElementById("profileForm");
 const jsonEditor = document.getElementById("jsonEditor");
 const workingJsonEditor = document.getElementById("workingJsonEditor");
 const apiUrlInput = document.getElementById("apiUrlInput");
+const userIdInput = document.getElementById("userIdInput");
+const backendProfileInput = document.getElementById("backendProfileInput");
 const autoFillInput = document.getElementById("autoFillInput");
 const submitModeInput = document.getElementById("submitModeInput");
 const statusElement = document.getElementById("status");
 const workingStats = document.getElementById("workingStats");
 const importJsonInput = document.getElementById("importJsonInput");
+const saveWorkingJsonButton = document.getElementById("saveWorkingJsonButton");
+const useSavedProfileButton = document.getElementById("useSavedProfileButton");
+let metadataSource = "saved";
 
 function fields() {
   return Array.from(form.elements).filter((element) => element.name);
@@ -47,6 +52,21 @@ function metadataEntries(metadata) {
   });
 }
 
+function hasMetadata(metadata) {
+  return metadataEntries(metadata).length > 0;
+}
+
+function resolveMetadataSource(stored) {
+  const source = String(stored?.curionMetadataSource || "");
+  if (source === "saved" || source === "working") return source;
+  return hasMetadata(stored?.curionWorkingMetadata) ? "working" : "saved";
+}
+
+function activeProfileForSettings(savedProfile, workingMetadata) {
+  if (metadataSource === "saved") return savedProfile;
+  return hasMetadata(workingMetadata) ? workingMetadata : savedProfile;
+}
+
 function setStatus(message) {
   statusElement.textContent = message;
 }
@@ -54,6 +74,14 @@ function setStatus(message) {
 function updateWorkingStats(metadata) {
   const count = metadataEntries(metadata).length;
   workingStats.textContent = count ? `${count} active fields` : "Inactive";
+}
+
+function renderMetadataSourceButtons() {
+  const usingWorkingMetadata = metadataSource === "working";
+  saveWorkingJsonButton.classList.toggle("primary", usingWorkingMetadata);
+  useSavedProfileButton.classList.toggle("primary", !usingWorkingMetadata);
+  saveWorkingJsonButton.setAttribute("aria-pressed", usingWorkingMetadata ? "true" : "false");
+  useSavedProfileButton.setAttribute("aria-pressed", usingWorkingMetadata ? "false" : "true");
 }
 
 function render(profile) {
@@ -73,6 +101,8 @@ async function saveProfile(profile) {
   await chrome.storage.local.set({
     curionProfile: profile,
     curionApiUrl: apiUrlInput.value.trim(),
+    curionUserId: userIdInput.value.trim(),
+    curionUseBackendProfile: backendProfileInput.checked,
     curionAutoFillEnabled: autoFillInput.checked,
     curionSubmitMode: submitModeInput.value
   });
@@ -84,23 +114,88 @@ async function loadProfile() {
   const stored = await chrome.storage.local.get([
     "curionProfile",
     "curionWorkingMetadata",
+    "curionMetadataSource",
     "curionApiUrl",
+    "curionUserId",
+    "curionUseBackendProfile",
     "curionAutoFillEnabled",
     "curionSubmitMode"
   ]);
+  metadataSource = resolveMetadataSource(stored);
   apiUrlInput.value = stored.curionApiUrl || DEFAULT_API_URL;
+  userIdInput.value = stored.curionUserId || "";
+  backendProfileInput.checked = Boolean(stored.curionUseBackendProfile);
   autoFillInput.checked = Boolean(stored.curionAutoFillEnabled);
   submitModeInput.value = stored.curionSubmitMode || "review";
   render(stored.curionProfile || SAMPLE_PROFILE);
   renderWorkingMetadata(stored.curionWorkingMetadata);
+  renderMetadataSourceButtons();
 }
 
 async function saveBehaviorSettings() {
   await chrome.storage.local.set({
+    curionUserId: userIdInput.value.trim(),
+    curionApiUrl: apiUrlInput.value.trim(),
+    curionUseBackendProfile: backendProfileInput.checked,
     curionAutoFillEnabled: autoFillInput.checked,
-    curionSubmitMode: submitModeInput.value
+    curionSubmitMode: submitModeInput.value,
+    curionMetadataSource: metadataSource
   });
   setStatus("Behavior settings saved.");
+}
+
+function ingestUrlFromMappingUrl(mappingUrl) {
+  const trimmed = String(mappingUrl || "").trim();
+  if (!trimmed) return "";
+  if (trimmed.endsWith("/api/agent/map-form")) {
+    return `${trimmed.slice(0, -"/api/agent/map-form".length)}/api/profile/ingest`;
+  }
+  return trimmed.replace(/\/agent\/map-form\/?$/, "/profile/ingest");
+}
+
+async function syncBackendProfile() {
+  const userId = userIdInput.value.trim();
+  if (!userId) {
+    throw new Error("Backend profile user ID is required.");
+  }
+
+  const ingestUrl = ingestUrlFromMappingUrl(apiUrlInput.value || DEFAULT_API_URL);
+  if (!ingestUrl) {
+    throw new Error("Backend API URL is required.");
+  }
+
+  const workingMetadata = workingJsonEditor.value.trim()
+    ? JSON.parse(workingJsonEditor.value)
+    : {};
+  const profile = activeProfileForSettings(formToProfile(), workingMetadata);
+
+  setStatus(`Syncing profile atoms to backend: ${ingestUrl}`);
+  let response;
+  try {
+    response = await fetch(ingestUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ userId, profile })
+    });
+  } catch (error) {
+    throw new Error(`Backend sync request failed for ${ingestUrl}: ${error.message || "Failed to fetch"}`);
+  }
+
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(payload.error || `Backend sync failed with status ${response.status}`);
+  }
+
+  await chrome.storage.local.set({
+    curionUserId: userId,
+    curionApiUrl: apiUrlInput.value.trim(),
+    curionUseBackendProfile: true,
+    curionMetadataSource: metadataSource
+  });
+  backendProfileInput.checked = true;
+  setStatus(`Backend profile synced for ${userId}. ${payload.atomCount || 0} atoms stored.`);
 }
 
 async function saveWorkingJson() {
@@ -114,15 +209,29 @@ async function saveWorkingJson() {
     throw new Error("Working metadata must be a JSON object.");
   }
 
-  await chrome.storage.local.set({ curionWorkingMetadata: parsed });
+  metadataSource = "working";
+  await chrome.storage.local.set({ curionWorkingMetadata: parsed, curionMetadataSource: metadataSource });
   renderWorkingMetadata(parsed);
+  renderMetadataSourceButtons();
+  saveWorkingJsonButton.focus();
   setStatus("Working metadata is now active.");
 }
 
 async function clearWorkingJson() {
-  await chrome.storage.local.set({ curionWorkingMetadata: {} });
+  metadataSource = "saved";
+  await chrome.storage.local.set({ curionWorkingMetadata: {}, curionMetadataSource: metadataSource });
   renderWorkingMetadata({});
+  renderMetadataSourceButtons();
+  useSavedProfileButton.focus();
   setStatus("Working metadata cleared. Curion will use the saved profile.");
+}
+
+async function useSavedProfile() {
+  metadataSource = "saved";
+  await chrome.storage.local.set({ curionMetadataSource: metadataSource });
+  renderMetadataSourceButtons();
+  useSavedProfileButton.focus();
+  setStatus("Saved profile is now active.");
 }
 
 function exportProfile() {
@@ -155,6 +264,10 @@ document.getElementById("saveWorkingJsonButton").addEventListener("click", () =>
   saveWorkingJson().catch((error) => setStatus(error.message || "Working metadata JSON is invalid."));
 });
 
+document.getElementById("useSavedProfileButton").addEventListener("click", () => {
+  useSavedProfile().catch((error) => setStatus(error.message));
+});
+
 document.getElementById("clearWorkingJsonButton").addEventListener("click", () => {
   clearWorkingJson().catch((error) => setStatus(error.message));
 });
@@ -172,6 +285,22 @@ autoFillInput.addEventListener("change", () => {
 
 submitModeInput.addEventListener("change", () => {
   saveBehaviorSettings().catch((error) => setStatus(error.message));
+});
+
+backendProfileInput.addEventListener("change", () => {
+  saveBehaviorSettings().catch((error) => setStatus(error.message));
+});
+
+userIdInput.addEventListener("change", () => {
+  saveBehaviorSettings().catch((error) => setStatus(error.message));
+});
+
+apiUrlInput.addEventListener("change", () => {
+  saveBehaviorSettings().catch((error) => setStatus(error.message));
+});
+
+document.getElementById("syncBackendButton").addEventListener("click", () => {
+  syncBackendProfile().catch((error) => setStatus(error.message || "Backend sync failed."));
 });
 
 document.getElementById("copyJsonButton").addEventListener("click", () => {

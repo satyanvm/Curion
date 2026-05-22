@@ -22,11 +22,29 @@ const state = {
   profile: null,
   workingMetadata: {},
   activeMetadata: null,
+  metadataSource: "saved",
   apiUrl: "",
+  userId: "",
+  useBackendProfile: false,
   submitMode: "review",
   autoFillEnabled: false,
   analysis: null
 };
+
+function hasMetadata(metadata) {
+  return metadataEntries(metadata).length > 0;
+}
+
+function resolveMetadataSource(stored) {
+  const source = String(stored?.curionMetadataSource || "");
+  if (source === "saved" || source === "working") return source;
+  return hasMetadata(stored?.curionWorkingMetadata) ? "working" : "saved";
+}
+
+function activeMetadataFromState(profile, workingMetadata, source) {
+  if (source === "saved") return profile || {};
+  return hasMetadata(workingMetadata) ? workingMetadata : (profile || {});
+}
 
 function getElements() {
   return {
@@ -58,10 +76,6 @@ function metadataEntries(metadata) {
   });
 }
 
-function hasMetadata(metadata) {
-  return metadataEntries(metadata).length > 0;
-}
-
 async function getActiveTab() {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   return tab;
@@ -71,7 +85,10 @@ async function loadProfile() {
   const stored = await chrome.storage.local.get([
     "curionProfile",
     "curionWorkingMetadata",
+    "curionMetadataSource",
     "curionApiUrl",
+    "curionUserId",
+    "curionUseBackendProfile",
     "curionAutoFillEnabled",
     "curionSubmitMode"
   ]);
@@ -80,8 +97,11 @@ async function loadProfile() {
   state.workingMetadata = stored.curionWorkingMetadata && typeof stored.curionWorkingMetadata === "object"
     ? stored.curionWorkingMetadata
     : {};
-  state.activeMetadata = hasMetadata(state.workingMetadata) ? state.workingMetadata : state.profile;
+  state.metadataSource = resolveMetadataSource(stored);
+  state.activeMetadata = activeMetadataFromState(state.profile, state.workingMetadata, state.metadataSource);
   state.apiUrl = stored.curionApiUrl || DEFAULT_API_URL;
+  state.userId = String(stored.curionUserId || "").trim();
+  state.useBackendProfile = Boolean(stored.curionUseBackendProfile && state.userId);
   state.submitMode = stored.curionSubmitMode || "review";
   state.autoFillEnabled = Boolean(stored.curionAutoFillEnabled);
   return state.activeMetadata;
@@ -90,7 +110,7 @@ async function loadProfile() {
 async function saveDefaultProfile() {
   await chrome.storage.local.set({ curionProfile: DEFAULT_PROFILE });
   state.profile = DEFAULT_PROFILE;
-  state.activeMetadata = hasMetadata(state.workingMetadata) ? state.workingMetadata : state.profile;
+  state.activeMetadata = activeMetadataFromState(state.profile, state.workingMetadata, state.metadataSource);
 }
 
 async function setCurionEnabled(enabled) {
@@ -103,28 +123,33 @@ async function useSampleProfile() {
   await chrome.storage.local.set({
     curionProfile: DEFAULT_PROFILE,
     curionWorkingMetadata: {},
+    curionMetadataSource: "saved",
     curionAutoFillEnabled: true
   });
   state.profile = DEFAULT_PROFILE;
   state.workingMetadata = {};
   state.activeMetadata = DEFAULT_PROFILE;
+  state.metadataSource = "saved";
   state.autoFillEnabled = true;
   renderProfileState();
 }
 
 function renderProfileState() {
   const elements = getElements();
-  const ready = hasMetadata(state.activeMetadata);
-  const usingWorkingMetadata = hasMetadata(state.workingMetadata);
+  const ready = hasMetadata(state.activeMetadata) || state.useBackendProfile;
+  const usingWorkingMetadata = state.metadataSource === "working" && hasMetadata(state.workingMetadata);
   const enabled = state.autoFillEnabled;
+  const metadataLabel = state.useBackendProfile
+    ? `Backend vector profile (${state.userId})`
+    : ready
+      ? (usingWorkingMetadata ? "Working metadata" : "Saved profile")
+      : "No metadata";
 
   elements.profileWarning.hidden = ready;
   elements.scanButton.disabled = !ready || !enabled;
   elements.fillButton.disabled = true;
   elements.enableInput.checked = enabled;
-  elements.metadataMode.textContent = `${ready ? (usingWorkingMetadata ? "Working metadata" : "Saved profile") : "No metadata"}${
-    enabled ? " · enabled" : " · off"
-  }`;
+  elements.metadataMode.textContent = `${metadataLabel}${enabled ? " · enabled" : " · off"}`;
   elements.submitMode.textContent = state.submitMode === "direct"
     ? "Direct submit"
     : "Review before submit";
@@ -201,7 +226,7 @@ async function scanPage() {
     return;
   }
 
-  if (!hasMetadata(state.activeMetadata)) {
+  if (!hasMetadata(state.activeMetadata) && !state.useBackendProfile) {
     elements.profileWarning.hidden = false;
     elements.pageStatus.textContent = "Profile data is missing";
     return;
@@ -209,38 +234,36 @@ async function scanPage() {
 
   elements.pageStatus.textContent = "Scanning current page...";
 
-  if (state.apiUrl) {
-    try {
-      const pageSnapshot = await sendToActiveTab({ type: "CURION_COLLECT_PAGE" });
-      const response = await fetch(state.apiUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          goal: "Fill this page with the active Curion metadata.",
-          ...pageSnapshot,
-          profile: state.activeMetadata
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error(`Backend mapping failed with status ${response.status}`);
-      }
-
-      const analysis = normalizeApiAnalysis(await response.json());
-      state.analysis = analysis;
-      renderAnalysis(analysis);
-      return;
-    } catch {
-      elements.pageStatus.textContent = "Backend unavailable; using local matching";
-    }
+  if (!state.apiUrl) {
+    elements.pageStatus.textContent = "Backend API URL is required for scans";
+    return;
   }
 
-  const analysis = await sendToActiveTab({
-    type: "CURION_ANALYZE",
-    profile: state.activeMetadata
+  const pageSnapshot = await sendToActiveTab({ type: "CURION_COLLECT_PAGE" });
+  const mappingPayload = state.useBackendProfile
+    ? {
+        goal: "Fill this page with the stored Curion backend profile.",
+        ...pageSnapshot,
+        userId: state.userId
+      }
+    : {
+        goal: "Fill this page with the active Curion metadata.",
+        ...pageSnapshot,
+        profile: state.activeMetadata
+      };
+  const response = await fetch(state.apiUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(mappingPayload)
   });
+
+  if (!response.ok) {
+    throw new Error(`Backend mapping failed with status ${response.status}`);
+  }
+
+  const analysis = normalizeApiAnalysis(await response.json());
   state.analysis = analysis;
   renderAnalysis(analysis);
 }
@@ -265,24 +288,16 @@ async function fillPage() {
 
   elements.pageStatus.textContent = "Filling matched fields...";
 
-  if (state.analysis?.source) {
-    const result = await sendToActiveTab({
-      type: "CURION_FILL_MAPPINGS",
-      mappings: state.analysis.mappings || [],
-      submitMode: state.submitMode
-    });
-    elements.pageStatus.textContent = submitStatusText(result, "backend-mapped fields");
-    return;
+  if (!state.analysis?.source) {
+    await scanPage();
   }
 
   const result = await sendToActiveTab({
-    type: "CURION_FILL",
-    profile: state.activeMetadata,
+    type: "CURION_FILL_MAPPINGS",
+    mappings: state.analysis?.mappings || [],
     submitMode: state.submitMode
   });
-  state.analysis = result;
-  renderAnalysis(result);
-  elements.pageStatus.textContent = submitStatusText(result, "fields");
+  elements.pageStatus.textContent = submitStatusText(result, "backend-mapped fields");
 }
 
 async function unfillPage() {

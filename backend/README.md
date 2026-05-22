@@ -20,7 +20,7 @@ Request body:
 }
 ```
 
-This endpoint flattens nested profile metadata into semantic atoms, embeds only structural descriptors with `gemini-embedding-2`, and stores the raw value separately in Supabase.
+This endpoint flattens nested profile metadata into semantic atoms, embeds only structural descriptors with `gemini-embedding-2`, and stores the raw value separately in Supabase. Derived name atoms use the same `firstName` / `lastName` path shape everywhere.
 
 `POST /api/agent/map-form`
 
@@ -43,14 +43,22 @@ Response body:
 
 ```json
 {
-  "source": "semantic-vector",
+  "source": "semantic-vector+llm",
   "fieldCount": 4,
   "mappedCount": 3,
   "overallConfidence": 0.84,
   "reviewRequired": false,
+  "mappingReport": {},
   "mappings": []
 }
 ```
+
+The mapping endpoint is the single mapping pipeline used by the extension and CLI test runner:
+
+1. DOM-extracted fields are embedded as retrieval queries.
+2. Profile atoms are matched semantically from Supabase when `userId` is supplied, or from the transient `profile` payload for local demos.
+3. Low-confidence or unmapped fields are sent to Gemini as an LLM fallback and resolved back to stored profile atoms.
+4. Vision fallback is intentionally not implemented yet.
 
 ## Environment Variables
 

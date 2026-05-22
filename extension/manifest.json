@@ -3,7 +3,7 @@
   "name": "Curion",
   "description": "AI-assisted form filling with reviewable saved profile data.",
   "version": "0.1.0",
-  "homepage_url": "https://frontend-six-omega-77.vercel.app",
+  "homepage_url": "https://curion.sbs",
   "permissions": ["activeTab", "storage"],
   "host_permissions": ["<all_urls>"],
   "action": {

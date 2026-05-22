@@ -2,7 +2,7 @@
 
 Manifest V3 extension that scans forms, maps visible fields to saved metadata, fills matched values, and can clear filled fields again.
 
-Frontend site: `https://frontend-six-omega-77.vercel.app`
+Frontend site: `https://curion.sbs`
 
 ## How Users Provide Metadata
 
@@ -19,6 +19,7 @@ Open **Curion -> Extension options**.
 - Paste default metadata into **Profile JSON** and click **Save JSON**.
 - Paste temporary JSON into **Current working metadata** and click **Use working JSON**.
 - Clear working metadata to fall back to the saved profile.
+- Enter a **Backend profile user ID**, click **Sync to backend**, and enable **Use stored backend vector profile for scans** when you want scans to query Supabase profile atoms instead of sending transient JSON.
 - Enable **Curion scanning and form filling**.
 - Choose **Ask for review before submit** or **Directly submit after filling**.
 - Import/export JSON for backup or migration.
@@ -65,12 +66,12 @@ Keep the extension JSON path for individuals. Use API-fed metadata for business 
 2. Save default metadata in options or paste working metadata JSON.
 3. Open a form page.
 4. Enable Curion scanning and form filling in options.
-5. When Curion detects a form, use the on-page **Auto-fill** prompt to fill the mapped fields.
+5. When Curion detects a form, it sends the DOM snapshot to the backend mapping API.
 6. Use the popup to scan, fill, or unfill visible controls manually.
 
 For local `file://` HTML form tests, open `chrome://extensions`, expand Curion details, and enable **Allow access to file URLs**. Chrome blocks content scripts on local files until that switch is enabled.
 
-If the backend API URL is empty or unavailable, the popup falls back to deterministic local matching in the content script.
+The extension uses the backend endpoint as the single mapping pipeline. The content script extracts DOM fields and fills returned mappings; semantic matching and LLM fallback happen in `POST /api/agent/map-form`.
 
 ## Backend API
 
@@ -80,7 +81,7 @@ Default endpoint:
 https://backend-three-mu-84.vercel.app/api/agent/map-form
 ```
 
-The popup sends `profile`, `fields`, `html`, `goal`, and `formContext`. See `backend/README.md`.
+The popup sends `profile`, `fields`, `html`, `goal`, and page context for transient matching. If **Use stored backend vector profile for scans** is enabled and a user ID is configured, the popup sends `userId` instead of `profile`, which makes the backend query stored Supabase vector atoms. The backend then runs semantic matching first and Gemini fallback only for low-confidence/unmapped fields. See `backend/README.md`.
 
 ## Files
 
@@ -89,5 +90,5 @@ The popup sends `profile`, `fields`, `html`, `goal`, and `formContext`. See `bac
 | `profileSchema.js` | Shared profile keys, sample data, sanitization |
 | `options.html` / `options.js` | Default metadata, working JSON, API URL, and behavior settings |
 | `popup.html` / `popup.js` | Scan, review, fill, unfill |
-| `contentScript.js` | DOM extraction, local matching, auto-fill, unfill, direct submit |
+| `contentScript.js` | DOM extraction, backend mapping calls, auto-fill, unfill, direct submit |
 | `background.js` | Receives profile imports from the web setup page |

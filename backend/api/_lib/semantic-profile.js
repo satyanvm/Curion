@@ -101,10 +101,10 @@ export function normalizeText(text) {
 export function splitNameParts(name) {
   const parts = String(name || "").trim().split(/\s+/).filter(Boolean);
   if (parts.length === 0) return {};
-  if (parts.length === 1) return { givenName: parts[0] };
+  if (parts.length === 1) return { firstName: parts[0] };
   return {
-    givenName: parts.slice(0, -1).join(" "),
-    familyName: parts[parts.length - 1]
+    firstName: parts.slice(0, -1).join(" "),
+    lastName: parts[parts.length - 1]
   };
 }
 
@@ -184,21 +184,21 @@ function addDerivedNameAtoms(atoms) {
     const lastSegment = atom.semanticPath.split(".").pop() || "";
     if (!/^(name|fullName|full_name)$/i.test(lastSegment)) continue;
 
-    const { givenName, familyName } = splitNameParts(atom.rawValue);
+    const { firstName, lastName } = splitNameParts(atom.rawValue);
     const prefix = atom.semanticPath.includes(".")
       ? atom.semanticPath.split(".").slice(0, -1).join(".")
       : "";
-    const givenPath = prefix ? `${prefix}.given_name` : "given_name";
-    const familyPath = prefix ? `${prefix}.family_name` : "family_name";
+    const firstNamePath = prefix ? `${prefix}.firstName` : "firstName";
+    const lastNamePath = prefix ? `${prefix}.lastName` : "lastName";
 
-    if (givenName && !existingPaths.has(givenPath)) {
-      derivedAtoms.push({ semanticPath: givenPath, rawValue: givenName });
-      existingPaths.add(givenPath);
+    if (firstName && !existingPaths.has(firstNamePath)) {
+      derivedAtoms.push({ semanticPath: firstNamePath, rawValue: firstName });
+      existingPaths.add(firstNamePath);
     }
 
-    if (familyName && !existingPaths.has(familyPath)) {
-      derivedAtoms.push({ semanticPath: familyPath, rawValue: familyName });
-      existingPaths.add(familyPath);
+    if (lastName && !existingPaths.has(lastNamePath)) {
+      derivedAtoms.push({ semanticPath: lastNamePath, rawValue: lastName });
+      existingPaths.add(lastNamePath);
     }
   }
 
@@ -321,6 +321,33 @@ export async function supabaseRpc(functionName, payload) {
   }
 
   if (response.status === 204) return null;
+  return response.json();
+}
+
+export async function supabaseSelectRows(tableName, query = {}) {
+  assertSupabaseConfigured();
+  const key = supabaseKey();
+  const url = new URL(`${supabaseUrl()}/rest/v1/${encodeURIComponent(tableName)}`);
+
+  for (const [name, value] of Object.entries(query)) {
+    if (value === undefined || value === null || value === "") continue;
+    url.searchParams.set(name, String(value));
+  }
+
+  const response = await fetch(url, {
+    method: "GET",
+    headers: {
+      apikey: key,
+      Authorization: `Bearer ${key}`,
+      Accept: "application/json"
+    }
+  });
+
+  if (!response.ok) {
+    const detail = await response.text().catch(() => "");
+    throw new Error(`Supabase table select ${tableName} failed with status ${response.status}${detail ? `: ${detail}` : ""}`);
+  }
+
   return response.json();
 }
 
