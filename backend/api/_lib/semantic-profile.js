@@ -73,14 +73,33 @@ const STRUCTURAL_CONCEPTS = [
   }
 ];
 
-export function setCorsHeaders(response) {
-  response.setHeader("Access-Control-Allow-Origin", "*");
-  response.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  response.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+function requestHeader(request, name) {
+  const headers = request?.headers;
+  if (!headers) return "";
+
+  if (typeof headers.get === "function") {
+    return headers.get(name) || "";
+  }
+
+  return headers[name] || headers[name.toLowerCase()] || "";
 }
 
-export function json(response, statusCode, payload) {
-  setCorsHeaders(response);
+export function setCorsHeaders(response, request) {
+  const origin = requestHeader(request, "origin");
+  const requestedHeaders = requestHeader(request, "access-control-request-headers");
+
+  response.setHeader("Access-Control-Allow-Origin", origin || "*");
+  response.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  response.setHeader(
+    "Access-Control-Allow-Headers",
+    requestedHeaders || "Content-Type, Authorization, X-Requested-With, Accept"
+  );
+  response.setHeader("Access-Control-Max-Age", "86400");
+  response.setHeader("Vary", "Origin, Access-Control-Request-Method, Access-Control-Request-Headers");
+}
+
+export function json(response, statusCode, payload, request) {
+  setCorsHeaders(response, request);
   response.status(statusCode).json(payload);
 }
 

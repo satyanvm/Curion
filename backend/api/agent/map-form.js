@@ -648,15 +648,15 @@ function summarize(mappings, extractionReport, source, warnings = []) {
 }
 
 export default async function handler(request, response) {
-  setCorsHeaders(response);
+  setCorsHeaders(response, request);
 
   if (request.method === "OPTIONS") {
-    response.status(204).end();
+    response.status(200).end();
     return;
   }
 
   if (request.method !== "POST") {
-    json(response, 405, { error: "Method not allowed" });
+    json(response, 405, { error: "Method not allowed" }, request);
     return;
   }
 
@@ -667,7 +667,7 @@ export default async function handler(request, response) {
     const extractionReport = calculateExtractionConfidence(fields);
 
     if (fields.length === 0) {
-      json(response, 200, summarize([], extractionReport, "semantic-vector", []));
+      json(response, 200, summarize([], extractionReport, "semantic-vector", []), request);
       return;
     }
 
@@ -709,10 +709,10 @@ export default async function handler(request, response) {
     mappings = llmResult.mappings;
     source = llmResult.source;
 
-    json(response, 200, summarize(mappings, extractionReport, source, warnings));
+    json(response, 200, summarize(mappings, extractionReport, source, warnings), request);
   } catch (error) {
     json(response, 400, {
       error: error.message || "Unable to map form"
-    });
+    }, request);
   }
 }
