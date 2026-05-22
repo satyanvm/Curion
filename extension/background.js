@@ -26,6 +26,9 @@ async function syncBackendProfile(request) {
 
   const response = await fetch(ingestUrl, {
     method: "POST",
+    headers: {
+      "Content-Type": "text/plain;charset=UTF-8"
+    },
     body: toJsonPayload({
       userId,
       profile: request?.profile || {}

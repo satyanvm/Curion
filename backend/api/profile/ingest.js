@@ -17,15 +17,15 @@ function validatePayload(body) {
 }
 
 export default async function handler(request, response) {
-  setCorsHeaders(response);
+  setCorsHeaders(response, request);
 
   if (request.method === "OPTIONS") {
-    response.status(204).end();
+    response.status(200).end();
     return;
   }
 
   if (request.method !== "POST") {
-    json(response, 405, { error: "Method not allowed" });
+    json(response, 405, { error: "Method not allowed" }, request);
     return;
   }
 
@@ -54,10 +54,10 @@ export default async function handler(request, response) {
       userId,
       atomCount: rows.length,
       result: Array.isArray(result) ? result[0] : result
-    });
+    }, request);
   } catch (error) {
     json(response, 400, {
       error: error.message || "Unable to ingest profile"
-    });
+    }, request);
   }
 }

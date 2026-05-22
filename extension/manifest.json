@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Curion",
   "description": "AI-assisted form filling with reviewable saved profile data.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "homepage_url": "https://curion.sbs",
   "icons": {
     "16": "icons/icon16.png",
