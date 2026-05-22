@@ -253,9 +253,6 @@ async function scanPage() {
       };
   const response = await fetch(state.apiUrl, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
     body: JSON.stringify(mappingPayload)
   });
 

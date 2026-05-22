@@ -4,8 +4,12 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "package:extension": "node ./build-extension.mjs",
+    "predev": "npm run package:extension",
     "dev": "python3 -m http.server 5173",
+    "prebuild": "npm run package:extension",
     "build": "node --check script.js",
+    "prepreview": "npm run package:extension",
     "preview": "python3 -m http.server 5173"
   }
 }

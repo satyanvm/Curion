@@ -3,6 +3,7 @@ import {
   clamp,
   cosineSimilarity,
   json,
+  parseRequestBody,
   normalizeText,
   profileAtomsFromProfile,
   semanticConceptForPath,
@@ -660,7 +661,7 @@ export default async function handler(request, response) {
   }
 
   try {
-    const body = request.body || {};
+    const body = parseRequestBody(request.body);
     const userId = String(body.userId || "").trim();
     const fields = Array.isArray(body.fields) ? body.fields.map(sanitizeField) : [];
     const extractionReport = calculateExtractionConfidence(fields);

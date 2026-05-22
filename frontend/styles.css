@@ -67,14 +67,13 @@ a {
 }
 
 .brand-mark {
-  display: grid;
+  display: block;
   width: 30px;
   height: 30px;
-  place-items: center;
-  color: var(--inverse-text);
+  flex: 0 0 auto;
+  object-fit: cover;
   background: var(--inverse);
   border-radius: 7px;
-  font-size: 14px;
 }
 
 .nav-links {

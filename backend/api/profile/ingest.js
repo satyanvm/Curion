@@ -2,6 +2,7 @@ import {
   batchEmbedTexts,
   json,
   profileAtomsFromProfile,
+  parseRequestBody,
   setCorsHeaders,
   supabaseRpc
 } from "../_lib/semantic-profile.js";
@@ -29,7 +30,7 @@ export default async function handler(request, response) {
   }
 
   try {
-    const { userId, profile } = validatePayload(request.body || {});
+    const { userId, profile } = validatePayload(parseRequestBody(request.body));
     const atoms = profileAtomsFromProfile(profile);
     const embeddings = await batchEmbedTexts(
       atoms.map((atom) => atom.embeddingText),

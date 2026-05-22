@@ -42,3 +42,9 @@ Then update DNS at the domain registrar using the records Vercel shows. Typical 
 - `www.curion.sbs`: `CNAME` record to `cname.vercel-dns.com`
 
 Use the exact DNS records shown in your Vercel dashboard if they differ.
+
+## Extension Package
+
+The frontend build now generates `curion-extension.zip` in the `frontend` folder and a matching `curion-mark.png` asset for the site and extension chrome.
+
+The homepage install button downloads that zip package directly.

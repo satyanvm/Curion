@@ -84,6 +84,37 @@ export function json(response, statusCode, payload) {
   response.status(statusCode).json(payload);
 }
 
+function isBinaryBody(body) {
+  return (
+    (typeof Buffer !== "undefined" && Buffer.isBuffer(body)) ||
+    body instanceof Uint8Array
+  );
+}
+
+export function parseRequestBody(body) {
+  if (body === undefined || body === null || body === "") {
+    return {};
+  }
+
+  if (isPlainObject(body)) {
+    return body;
+  }
+
+  const text = isBinaryBody(body)
+    ? Buffer.from(body).toString("utf8")
+    : String(body);
+
+  if (!text.trim()) {
+    return {};
+  }
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error("Request body must be valid JSON");
+  }
+}
+
 export function clamp(value) {
   return Math.max(0, Math.min(1, value));
 }
