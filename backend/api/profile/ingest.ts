@@ -57,7 +57,7 @@ export default async function handler(request, response) {
     }, request);
   } catch (error) {
     json(response, 400, {
-      error: error.message || "Unable to ingest profile"
+      error: error instanceof Error ? error.message : "Unable to ingest profile"
     }, request);
   }
 }

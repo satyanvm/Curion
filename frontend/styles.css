@@ -532,6 +532,62 @@ h3 {
   gap: 18px;
 }
 
+.install-section {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(320px, 0.8fr);
+  gap: 28px;
+  align-items: start;
+  padding: 86px 0;
+}
+
+.install-copy {
+  display: grid;
+  gap: 18px;
+  max-width: 640px;
+}
+
+.install-copy p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 17px;
+}
+
+.install-steps {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.install-step {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  gap: 14px;
+  padding: 18px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.install-step span {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  color: var(--inverse-text);
+  background: var(--inverse);
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.install-step p {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+
 .preview-toolbar {
   min-height: 48px;
   padding: 0 16px;
@@ -688,7 +744,8 @@ dd {
 @media (max-width: 940px) {
   .hero,
   .split-heading,
-  .preview-layout {
+  .preview-layout,
+  .install-section {
     grid-template-columns: 1fr;
   }
 
@@ -748,6 +805,10 @@ dd {
     padding: 66px 0;
   }
 
+  .install-section {
+    padding: 66px 0;
+  }
+
   .feature-row {
     grid-template-columns: 34px minmax(0, 1fr);
     padding: 20px;
@@ -796,5 +857,10 @@ dd {
 
   .mock-form label:nth-of-type(4) {
     display: none;
+  }
+
+  .install-step {
+    grid-template-columns: 26px minmax(0, 1fr);
+    padding: 16px;
   }
 }

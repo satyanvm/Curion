@@ -11,7 +11,7 @@ const observer = new IntersectionObserver(
 );
 
 document
-  .querySelectorAll(".feature-row, .process-track article, .autofill-preview")
+  .querySelectorAll(".feature-row, .process-track article, .autofill-preview, .install-step")
   .forEach((element) => {
     element.classList.add("reveal-on-scroll");
     observer.observe(element);

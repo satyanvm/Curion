@@ -5,7 +5,10 @@ import { deflateRawSync, deflateSync } from "node:zlib";
 
 const CRC_TABLE = buildCrcTable();
 
-const frontendDir = path.dirname(fileURLToPath(import.meta.url));
+const compiledDir = path.dirname(fileURLToPath(import.meta.url));
+const frontendDir = path.basename(compiledDir) === "dist"
+  ? path.resolve(compiledDir, "..")
+  : compiledDir;
 const rootDir = path.resolve(frontendDir, "..");
 const extensionDir = path.join(rootDir, "extension");
 const iconDir = path.join(extensionDir, "icons");

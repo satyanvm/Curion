@@ -1,0 +1,8 @@
+# Runtime JavaScript emitted from TypeScript sources.
+extension/*.js linguist-generated=true
+frontend/dist/*.js linguist-generated=true
+
+# Packaged/generated extension assets.
+frontend/curion-extension.zip linguist-generated=true
+frontend/curion-mark.png linguist-generated=true
+extension/icons/*.png linguist-generated=true

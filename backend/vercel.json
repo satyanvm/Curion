@@ -2,7 +2,7 @@
   "version": 2,
   "outputDirectory": ".",
   "functions": {
-    "api/**/*.js": {
+    "api/**/*.ts": {
       "maxDuration": 30
     }
   },
