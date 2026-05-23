@@ -4,11 +4,15 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "node --check api/agent/map-form.js && node --check api/profile/ingest.js && node --check api/_lib/semantic-profile.js && node --check api/_lib/gemini.js",
+    "build": "tsc -p tsconfig.json --noEmit",
     "dev": "vercel dev",
     "deploy": "vercel --prod"
   },
   "engines": {
     "node": ">=24 <25"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.8.3"
   }
 }

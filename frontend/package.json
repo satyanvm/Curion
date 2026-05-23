@@ -4,12 +4,17 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "package:extension": "node ./build-extension.mjs",
+    "build:ts": "tsc -p tsconfig.json",
+    "package:extension": "npm run build:ts && npm exec -- tsc -p ../extension/tsconfig.json && node ./dist/build-extension.js",
     "predev": "npm run package:extension",
     "dev": "python3 -m http.server 5173",
     "prebuild": "npm run package:extension",
-    "build": "node --check script.js",
+    "build": "npm run build:ts && node --check dist/script.js",
     "prepreview": "npm run package:extension",
     "preview": "python3 -m http.server 5173"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.8.3"
   }
 }

@@ -45,6 +45,12 @@ Use the exact DNS records shown in your Vercel dashboard if they differ.
 
 ## Extension Package
 
-The frontend build now generates `curion-extension.zip` in the `frontend` folder and a matching `curion-mark.png` asset for the site and extension chrome.
+The frontend build generates `curion-extension.zip` in the `frontend` folder and a matching `curion-mark.png` asset for the site and extension chrome.
 
-The homepage install button downloads that zip package directly.
+The homepage install button downloads that zip package directly, then the page shows the manual Chrome steps:
+
+1. Download the zip.
+2. Unzip it.
+3. Open `chrome://extensions`.
+4. Enable Developer mode.
+5. Click `Load unpacked` and choose the extracted folder.

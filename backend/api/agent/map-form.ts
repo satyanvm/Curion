@@ -214,13 +214,13 @@ async function applyLlmFallback(body, fields, mappings, source, userId, extracti
       prompt
     );
 
-    const parsed = JSON.parse(content);
+    const parsed = JSON.parse(content) as Record<string, string>;
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
       throw new Error("Gemini response was not a JSON object");
     }
 
-    const byLabel = new Map(mappings.map((entry) => [entry.field.label, entry]));
-    for (const [fieldLabel, chosenValue] of Object.entries(parsed)) {
+    const byLabel = new Map<string, (typeof mappings)[number]>(mappings.map((entry) => [entry.field.label, entry]));
+    for (const [fieldLabel, chosenValue] of Object.entries(parsed as Record<string, string>)) {
       const entry = byLabel.get(fieldLabel);
       if (!entry) continue;
 
@@ -237,7 +237,7 @@ async function applyLlmFallback(body, fields, mappings, source, userId, extracti
       warnings
     };
   } catch (error) {
-    warnings.push(`Gemini fallback failed: ${error.message || "unknown error"}`);
+    warnings.push(`Gemini fallback failed: ${error instanceof Error ? error.message : "unknown error"}`);
     return { mappings, source, warnings };
   }
 }
@@ -712,7 +712,7 @@ export default async function handler(request, response) {
     json(response, 200, summarize(mappings, extractionReport, source, warnings), request);
   } catch (error) {
     json(response, 400, {
-      error: error.message || "Unable to map form"
+      error: error instanceof Error ? error.message : "Unable to map form"
     }, request);
   }
 }

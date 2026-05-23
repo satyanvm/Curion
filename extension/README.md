@@ -88,8 +88,8 @@ The popup sends `profile`, `fields`, `html`, `goal`, and page context for transi
 
 | File | Role |
 |------|------|
-| `profileSchema.js` | Shared profile keys, sample data, sanitization |
-| `options.html` / `options.js` | Default metadata, working JSON, API URL, and behavior settings |
-| `popup.html` / `popup.js` | Scan, review, fill, unfill |
-| `contentScript.js` | DOM extraction, backend mapping calls, auto-fill, unfill, direct submit |
-| `background.js` | Handles backend profile sync requests from the options page |
+| `profileSchema.ts` | Shared profile keys, sample data, sanitization |
+| `options.html` / `options.ts` | Default metadata, working JSON, API URL, and behavior settings |
+| `popup.html` / `popup.ts` | Scan, review, fill, unfill |
+| `contentScript.ts` | DOM extraction, backend mapping calls, auto-fill, unfill, direct submit |
+| `background.ts` | Handles backend profile sync requests from the options page |

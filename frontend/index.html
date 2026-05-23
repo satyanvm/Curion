@@ -20,6 +20,7 @@
         <a href="#features">Features</a>
         <a href="#how-it-works">How it works</a>
         <a href="#preview">Preview</a>
+        <a href="#install">Install</a>
       </nav>
     </header>
 
@@ -35,13 +36,12 @@
           <div class="hero-actions" aria-label="Primary actions">
             <a
               class="button button-primary"
-              href="https://chromewebstore.google.com/detail/curion/omdnpdiagdgkkcanobkcgcojognkdhak"
-              target="_blank"
-              rel="noreferrer"
+              href="./curion-extension.zip"
+              download="curion-extension.zip"
             >
-              Install Extension
+              Download ZIP
             </a>
-            <a class="button button-secondary" href="#preview">View Demo</a>
+            <a class="button button-secondary" href="#install">How to install</a>
           </div>
         </div>
 
@@ -226,20 +226,63 @@
         </div>
       </section>
 
-      <section class="section-shell download-section" id="download" aria-labelledby="download-title">
-        <div>
-          <p class="eyebrow">Start with the extension</p>
-          <h2 id="download-title">Install Curion where forms already happen.</h2>
+      <section class="section-shell install-section" id="install" aria-labelledby="install-title">
+        <div class="install-copy">
+          <p class="eyebrow">Manual install</p>
+          <h2 id="install-title">Download the zip, unzip it, and load the folder unpacked.</h2>
+          <p>
+            Curion works like a normal Chrome extension once it is loaded. The only
+            difference from the Web Store path is that updates stay manual.
+          </p>
+          <div class="hero-actions" aria-label="Installation actions">
+            <a
+              class="button button-primary"
+              href="./curion-extension.zip"
+              download="curion-extension.zip"
+            >
+              Download ZIP
+            </a>
+            <a class="button button-secondary" href="#install-steps">View steps</a>
+          </div>
         </div>
-        <a
-          class="button button-primary"
-          href="https://chromewebstore.google.com/detail/curion/omdnpdiagdgkkcanobkcgcojognkdhak"
-          target="_blank"
-          rel="noreferrer"
-          aria-label="Open Curion in the Chrome Web Store"
-        >
-          Install Extension
-        </a>
+
+        <ol class="install-steps" id="install-steps" aria-label="Chrome install steps">
+          <li class="install-step">
+            <span>1</span>
+            <div>
+              <h3>Download the zip</h3>
+              <p>Save the Curion extension bundle from this site.</p>
+            </div>
+          </li>
+          <li class="install-step">
+            <span>2</span>
+            <div>
+              <h3>Unzip it</h3>
+              <p>Extract the archive so Chrome can read the extension folder.</p>
+            </div>
+          </li>
+          <li class="install-step">
+            <span>3</span>
+            <div>
+              <h3>Open Chrome extensions</h3>
+              <p>Go to <code>chrome://extensions</code> in Chrome.</p>
+            </div>
+          </li>
+          <li class="install-step">
+            <span>4</span>
+            <div>
+              <h3>Load unpacked</h3>
+              <p>Turn on Developer mode, then choose the extracted Curion folder.</p>
+            </div>
+          </li>
+          <li class="install-step">
+            <span>5</span>
+            <div>
+              <h3>Use Curion</h3>
+              <p>Pin the extension if you want it in the toolbar, then open the popup and options page.</p>
+            </div>
+          </li>
+        </ol>
       </section>
     </main>
 
@@ -251,6 +294,6 @@
       </div>
     </footer>
 
-    <script src="./script.js"></script>
+    <script src="./dist/script.js"></script>
   </body>
 </html>
