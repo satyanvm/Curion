@@ -135,6 +135,16 @@ select {
   font-size: 14px;
 }
 
+button:focus,
+input:focus,
+textarea:focus,
+select:focus,
+.import-button:focus-within {
+  border-color: var(--ink);
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
 input {
   height: 40px;
   padding: 0 11px;

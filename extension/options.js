@@ -196,7 +196,7 @@
             throw new Error("Working metadata must be a JSON object.");
         }
         await applyWorkingJson(parsed, "Working metadata is now active.");
-        saveWorkingJsonButton.focus();
+        workingJsonEditor.focus();
     }
     async function applyWorkingJson(parsed, statusMessage) {
         metadataSource = "working";

@@ -220,7 +220,7 @@ async function saveWorkingJson() {
   }
 
   await applyWorkingJson(parsed, "Working metadata is now active.");
-  saveWorkingJsonButton.focus();
+  workingJsonEditor.focus();
 }
 
 async function applyWorkingJson(parsed: any, statusMessage: string) {
