@@ -11,10 +11,16 @@ https://curion.sbs
 ## Project Settings
 
 - Project root: `frontend`
-- Framework preset: Other
+- Framework preset: Vite
 - Build command: `npm run build`
-- Output directory: leave empty
+- Output directory: `dist`
 - Install command: leave default or empty
+
+The frontend is a React app built with Vite. Local development runs with:
+
+```bash
+npm run dev
+```
 
 ## Deploy
 
@@ -45,12 +51,14 @@ Use the exact DNS records shown in your Vercel dashboard if they differ.
 
 ## Extension Package
 
-The frontend build generates `curion-extension.zip` in the `frontend` folder and a matching `curion-mark.png` asset for the site and extension chrome.
+The frontend build packages the Chrome extension before Vite builds the React app. It generates `curion-extension.zip` and `curion-mark.png` in the `frontend` folder, plus public copies under `frontend/public/` so Vite can serve and copy them into `dist`.
 
-The homepage install button downloads that zip package directly, then the page shows the manual Chrome steps:
+The homepage install buttons open `/install`, which shows the package download button and the manual Chrome steps:
 
 1. Download the zip.
 2. Unzip it.
 3. Open `chrome://extensions`.
 4. Enable Developer mode.
 5. Click `Load unpacked` and choose the extracted folder.
+
+Production downloads use the frontend rewrite from `/api/extension/download` to the backend download endpoint. Local Vite previews fall back to `/curion-extension.zip`.

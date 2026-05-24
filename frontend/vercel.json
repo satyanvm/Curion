@@ -1,7 +1,13 @@
 {
-  "outputDirectory": ".",
+  "outputDirectory": "dist",
   "cleanUrls": true,
   "trailingSlash": false,
+  "rewrites": [
+    {
+      "source": "/api/extension/download",
+      "destination": "https://backend-three-mu-84.vercel.app/api/extension/download"
+    }
+  ],
   "headers": [
     {
       "source": "/(.*)",

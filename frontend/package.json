@@ -4,17 +4,26 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build:ts": "tsc -p tsconfig.json",
-    "package:extension": "npm run build:ts && npm exec -- tsc -p ../extension/tsconfig.json && node ./dist/build-extension.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "build:extension": "tsc -p tsconfig.node.json",
+    "package:extension": "npm run build:extension && npm exec -- tsc -p ../extension/tsconfig.json && node ./.cache/build-extension.js",
     "predev": "npm run package:extension",
-    "dev": "python3 -m http.server 5173",
+    "dev": "vite",
     "prebuild": "npm run package:extension",
-    "build": "npm run build:ts && node --check dist/script.js",
+    "build": "npm run typecheck && vite build",
     "prepreview": "npm run package:extension",
-    "preview": "python3 -m http.server 5173"
+    "preview": "vite preview --host 127.0.0.1 --port 5173"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
-    "typescript": "^5.8.3"
+    "@types/react": "^19.2.15",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.2",
+    "typescript": "^5.8.3",
+    "vite": "^8.0.14"
+  },
+  "dependencies": {
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6"
   }
 }

@@ -1,1 +1,6 @@
 .vercel
+node_modules
+dist
+.cache
+public/curion-extension.zip
+public/curion-mark.png

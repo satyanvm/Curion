@@ -6,27 +6,53 @@ import { deflateRawSync, deflateSync } from "node:zlib";
 const CRC_TABLE = buildCrcTable();
 
 const compiledDir = path.dirname(fileURLToPath(import.meta.url));
-const frontendDir = path.basename(compiledDir) === "dist"
-  ? path.resolve(compiledDir, "..")
-  : compiledDir;
+const frontendDir = findFrontendDir(compiledDir);
 const rootDir = path.resolve(frontendDir, "..");
 const extensionDir = path.join(rootDir, "extension");
 const iconDir = path.join(extensionDir, "icons");
+const publicDir = path.join(frontendDir, "public");
 const packagePath = path.join(frontendDir, "curion-extension.zip");
+const publicPackagePath = path.join(publicDir, "curion-extension.zip");
 const brandMarkPath = path.join(frontendDir, "curion-mark.png");
+const publicBrandMarkPath = path.join(publicDir, "curion-mark.png");
 
 fs.mkdirSync(iconDir, { recursive: true });
+fs.mkdirSync(publicDir, { recursive: true });
 
 for (const size of [16, 32, 48, 128]) {
   const iconPath = path.join(iconDir, `icon${size}.png`);
   fs.writeFileSync(iconPath, renderIcon(size));
 }
 
-fs.copyFileSync(path.join(iconDir, "icon128.png"), brandMarkPath);
-fs.writeFileSync(packagePath, createZipArchive(extensionDir));
+const icon128Path = path.join(iconDir, "icon128.png");
+const zipArchive = createZipArchive(extensionDir);
+
+fs.copyFileSync(icon128Path, brandMarkPath);
+fs.copyFileSync(icon128Path, publicBrandMarkPath);
+fs.writeFileSync(packagePath, zipArchive);
+fs.writeFileSync(publicPackagePath, zipArchive);
 
 console.log(`Built ${path.relative(rootDir, packagePath)}`);
+console.log(`Built ${path.relative(rootDir, publicPackagePath)}`);
 console.log(`Built ${path.relative(rootDir, brandMarkPath)}`);
+console.log(`Built ${path.relative(rootDir, publicBrandMarkPath)}`);
+
+function findFrontendDir(startDir) {
+  let currentDir = startDir;
+
+  while (currentDir !== path.dirname(currentDir)) {
+    if (
+      fs.existsSync(path.join(currentDir, "package.json")) &&
+      fs.existsSync(path.join(currentDir, "build-extension.ts"))
+    ) {
+      return currentDir;
+    }
+
+    currentDir = path.dirname(currentDir);
+  }
+
+  throw new Error(`Unable to locate frontend directory from ${startDir}`);
+}
 
 function renderIcon(size) {
   const bg = 7;
