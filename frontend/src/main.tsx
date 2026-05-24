@@ -122,7 +122,12 @@ const installSteps = [
   {
     step: "5",
     title: "Click Load unpacked",
-    body: "Select the extracted Curion folder, then confirm the extension appears in Chrome."
+    body: (
+      <>
+        In Chrome Extensions, click <strong className="chrome-action">Load unpacked</strong>,
+        select the extracted Curion folder, then confirm the extension appears in Chrome.
+      </>
+    )
   },
   {
     step: "6",
