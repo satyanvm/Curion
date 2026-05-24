@@ -623,6 +623,19 @@ h3 {
   font-size: 14px;
 }
 
+.chrome-action {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 2px 8px;
+  color: var(--inverse-text);
+  background: var(--inverse);
+  border-radius: 6px;
+  font-size: 0.94em;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
 code {
   padding: 2px 5px;
   color: var(--ink);
