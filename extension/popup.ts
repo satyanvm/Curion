@@ -6,7 +6,6 @@ type State = {
   activeMetadata: AnyRecord | null;
   metadataSource: string;
   userId: string;
-  useBackendProfile: boolean;
   submitMode: string;
   autoFillEnabled: boolean;
   analysis: AnyRecord | null;
@@ -38,7 +37,6 @@ const state: State = {
   activeMetadata: null,
   metadataSource: "saved",
   userId: "",
-  useBackendProfile: false,
   submitMode: "review",
   autoFillEnabled: false,
   analysis: null
@@ -51,7 +49,7 @@ function hasMetadata(metadata: AnyRecord | null | undefined) {
 function resolveMetadataSource(stored: AnyRecord) {
   const source = String(stored?.curionMetadataSource || "");
   if (source === "saved" || source === "working") return source;
-  return hasMetadata(stored?.curionWorkingMetadata) ? "working" : "saved";
+  return "saved";
 }
 
 function activeMetadataFromState(profile: AnyRecord | null, workingMetadata: AnyRecord, source: string) {
@@ -104,6 +102,7 @@ async function loadProfile() {
     "curionAutoFillEnabled",
     "curionSubmitMode"
   ]);
+  await chrome.storage.local.remove("curionApiUrl");
 
   state.profile = stored.curionProfile || null;
   state.workingMetadata = stored.curionWorkingMetadata && typeof stored.curionWorkingMetadata === "object"
@@ -111,16 +110,16 @@ async function loadProfile() {
     : {};
   state.metadataSource = resolveMetadataSource(stored);
   state.activeMetadata = activeMetadataFromState(state.profile, state.workingMetadata, state.metadataSource);
-  state.userId = String(stored.curionUserId || "").trim();
-  state.useBackendProfile = Boolean(stored.curionUseBackendProfile && state.userId);
+  state.userId = stored.curionUseBackendProfile === false ? "" : String(stored.curionUserId || "").trim();
   state.submitMode = stored.curionSubmitMode || "review";
   state.autoFillEnabled = Boolean(stored.curionAutoFillEnabled);
   return state.activeMetadata;
 }
 
 async function saveDefaultProfile() {
-  await chrome.storage.local.set({ curionProfile: DEFAULT_PROFILE });
+  await chrome.storage.local.set({ curionProfile: DEFAULT_PROFILE, curionMetadataSource: "saved" });
   state.profile = DEFAULT_PROFILE;
+  state.metadataSource = "saved";
   state.activeMetadata = activeMetadataFromState(state.profile, state.workingMetadata, state.metadataSource);
 }
 
@@ -135,24 +134,26 @@ async function useSampleProfile() {
     curionProfile: DEFAULT_PROFILE,
     curionWorkingMetadata: {},
     curionMetadataSource: "saved",
+    curionUserId: "",
+    curionUseBackendProfile: false,
     curionAutoFillEnabled: true
   });
   state.profile = DEFAULT_PROFILE;
   state.workingMetadata = {};
   state.activeMetadata = DEFAULT_PROFILE;
   state.metadataSource = "saved";
+  state.userId = "";
   state.autoFillEnabled = true;
   renderProfileState();
 }
 
 function renderProfileState() {
   const elements = getElements();
-  const ready = hasMetadata(state.activeMetadata) || state.useBackendProfile;
+  const usingSavedProfile = state.metadataSource !== "working";
+  const ready = hasMetadata(state.activeMetadata) || (usingSavedProfile && Boolean(state.userId));
   const usingWorkingMetadata = state.metadataSource === "working" && hasMetadata(state.workingMetadata);
   const enabled = state.autoFillEnabled;
-  const metadataLabel = state.useBackendProfile
-    ? `Backend vector profile (${state.userId})`
-    : ready
+  const metadataLabel = ready
       ? (usingWorkingMetadata ? "Working metadata" : "Saved profile")
       : "No metadata";
 
@@ -237,7 +238,8 @@ async function scanPage() {
     return;
   }
 
-  if (!hasMetadata(state.activeMetadata) && !state.useBackendProfile) {
+  const useStoredProfile = state.metadataSource !== "working" && Boolean(state.userId);
+  if (!useStoredProfile && !hasMetadata(state.activeMetadata)) {
     elements.profileWarning.hidden = false;
     elements.pageStatus.textContent = "Profile data is missing";
     return;
@@ -246,17 +248,15 @@ async function scanPage() {
   elements.pageStatus.textContent = "Scanning current page...";
 
   const pageSnapshot = await sendToActiveTab({ type: "CURION_COLLECT_PAGE" });
-  const mappingPayload = state.useBackendProfile
-    ? {
-        goal: "Fill this page with the stored Curion backend profile.",
-        ...pageSnapshot,
-        userId: state.userId
-      }
-    : {
-        goal: "Fill this page with the active Curion metadata.",
-        ...pageSnapshot,
-        profile: state.activeMetadata
-      };
+  const mappingPayload: AnyRecord = {
+    goal: "Fill this page with the active Curion metadata.",
+    ...pageSnapshot
+  };
+  if (useStoredProfile) {
+    mappingPayload.userId = state.userId;
+  } else {
+    mappingPayload.profile = state.activeMetadata;
+  }
   const response = await fetch(DEFAULT_API_URL, {
     method: "POST",
     body: JSON.stringify(mappingPayload)

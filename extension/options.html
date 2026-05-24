@@ -13,7 +13,7 @@
           <img class="brand-mark" src="./icons/icon48.png" alt="" aria-hidden="true" />
           <span>Curion</span>
         </a>
-        <p>Profile data used for filling forms stays in Chrome local extension storage.</p>
+        <p>Saved profile data is stored for backend matching, while working JSON stays optional.</p>
       </header>
 
       <section class="editor-layout">
@@ -27,17 +27,9 @@
             <label>
               Submission mode
               <select id="submitModeInput">
-                <option value="review">Ask for review before submit</option>
+                <option value="review" selected>Ask for review before submit</option>
                 <option value="direct">Directly submit after filling</option>
               </select>
-            </label>
-            <label>
-              Backend profile user ID
-              <input id="userIdInput" autocomplete="off" placeholder="user_123" />
-            </label>
-            <label class="check-row">
-              <input id="backendProfileInput" type="checkbox" />
-              Use stored backend vector profile for scans
             </label>
           </fieldset>
 
@@ -58,7 +50,6 @@
           <label>Terms value<input name="acceptTerms" /></label>
           <div class="form-actions">
             <button class="primary" type="submit">Save profile</button>
-            <button id="syncBackendButton" type="button">Sync to backend</button>
             <button id="loadSampleButton" type="button">Load sample</button>
             <button id="exportJsonButton" type="button">Export JSON</button>
             <label class="import-button">

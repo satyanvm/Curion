@@ -6,26 +6,25 @@ Frontend site: `https://curion.sbs`
 
 ## How Users Provide Metadata
 
-Curion uses a fixed profile object plus optional per-form context. The extension now has two metadata layers:
+Curion uses a saved backend profile plus optional per-form context. The extension has two metadata layers:
 
-1. `curionProfile`: default saved profile metadata.
+1. `curionProfile`: default saved profile metadata, mirrored to backend profile atoms when saved.
 2. `curionWorkingMetadata`: temporary working JSON that overrides the default profile when any value is present.
 
 ### Individual Users: Extension Metadata
 
 Open **Curion -> Extension options**.
 
-- Edit default metadata in the form UI.
-- Paste default metadata into **Profile JSON** and click **Save JSON**.
-- Paste temporary JSON into **Current working metadata**. It activates as soon as the JSON is valid, and you can still click **Use working JSON** to force it on.
+- Edit default metadata in the form UI and click **Save profile**. Curion saves it to the backend and selects **Use saved profile** by default.
+- Paste default metadata into **Profile JSON** and click **Save JSON** to save that profile to the backend.
+- Paste temporary JSON into **Current working metadata**, then click **Use working JSON** when you want that JSON to override the saved profile.
 - The working JSON editor starts empty so you can paste a fresh payload directly.
 - Clear working metadata to fall back to the saved profile.
-- Enter a **Backend profile user ID**, click **Sync to backend**, and enable **Use stored backend vector profile for scans** when you want scans to query Supabase profile atoms instead of sending transient JSON.
 - Enable **Curion scanning and form filling**.
 - Choose **Ask for review before submit** or **Directly submit after filling**.
 - Import/export JSON for backup or migration.
 
-This is the right model for personal profiles, solo workflows, and quick demos because the user owns the JSON locally in Chrome extension storage.
+This is the right model for personal profiles, solo workflows, and quick demos because the saved profile is explicit and the working JSON override remains temporary.
 
 ### Businesses: API Metadata
 
@@ -82,14 +81,13 @@ Default endpoint:
 https://backend-three-mu-84.vercel.app/api/agent/map-form
 ```
 
-The popup sends `profile`, `fields`, `html`, `goal`, and page context for transient matching. If **Use stored backend vector profile for scans** is enabled and a user ID is configured, the popup sends `userId` instead of `profile`, which makes the backend query stored Supabase vector atoms. The backend then runs semantic matching first and Gemini fallback only for low-confidence/unmapped fields. See `backend/README.md`.
+The popup sends `userId`, `fields`, `html`, `goal`, and page context when **Saved profile** is active, which makes the backend query stored Supabase vector atoms. If **Working JSON** is active, it sends the transient `profile` payload instead. The backend then runs semantic matching first and Gemini fallback only for low-confidence/unmapped fields. See `backend/README.md`.
 
 ## Files
 
 | File | Role |
 |------|------|
 | `profileSchema.ts` | Shared profile keys, sample data, sanitization |
-| `options.html` / `options.ts` | Default metadata, working JSON, backend profile user ID, and behavior settings |
+| `options.html` / `options.ts` | Default metadata, working JSON, and behavior settings |
 | `popup.html` / `popup.ts` | Scan, review, fill, unfill |
 | `contentScript.ts` | DOM extraction, backend mapping calls, auto-fill, unfill, direct submit |
-| `background.ts` | Handles backend profile sync requests from the options page |

@@ -49,7 +49,7 @@ const features: Feature[] = [
   },
   {
     index: "04",
-    title: "Secure local data usage",
+    title: "Reviewable saved context",
     body: "Your saved context stays explicit, reviewable, and easy to update."
   }
 ];
@@ -85,7 +85,7 @@ const installHighlights = [
   },
   {
     label: "LOAD",
-    title: "Load unpacked",
+    title: "Select the folder",
     body: "Select the extracted Curion folder and start using the popup."
   }
 ];
@@ -121,10 +121,10 @@ const installSteps = [
   },
   {
     step: "5",
-    title: "Click Load unpacked",
+    title: "Choose the extension folder",
     body: (
       <>
-        In Chrome Extensions, click <strong className="chrome-action">Load unpacked</strong>,
+        In Chrome Extensions, click Load unpacked,
         select the extracted Curion folder, then confirm the extension appears in Chrome.
       </>
     )
@@ -139,7 +139,7 @@ const installSteps = [
 const postInstallItems = [
   {
     title: "Options",
-    body: "Add your profile fields, backend profile user ID, and fill behavior."
+    body: "Add your profile fields and fill behavior."
   },
   {
     title: "Scan",
