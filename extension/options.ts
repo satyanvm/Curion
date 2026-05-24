@@ -22,7 +22,6 @@ const DEFAULT_API_URL = "https://backend-three-mu-84.vercel.app/api/agent/map-fo
 const form = document.getElementById("profileForm") as any;
 const jsonEditor = document.getElementById("jsonEditor") as any;
 const workingJsonEditor = document.getElementById("workingJsonEditor") as any;
-const apiUrlInput = document.getElementById("apiUrlInput") as any;
 const userIdInput = document.getElementById("userIdInput") as any;
 const backendProfileInput = document.getElementById("backendProfileInput") as any;
 const autoFillInput = document.getElementById("autoFillInput") as any;
@@ -105,7 +104,6 @@ function renderWorkingMetadata(metadata: any) {
 async function saveProfile(profile: any) {
   await chrome.storage.local.set({
     curionProfile: profile,
-    curionApiUrl: apiUrlInput.value.trim(),
     curionUserId: userIdInput.value.trim(),
     curionUseBackendProfile: backendProfileInput.checked,
     curionAutoFillEnabled: autoFillInput.checked,
@@ -120,14 +118,13 @@ async function loadProfile() {
     "curionProfile",
     "curionWorkingMetadata",
     "curionMetadataSource",
-    "curionApiUrl",
     "curionUserId",
     "curionUseBackendProfile",
     "curionAutoFillEnabled",
     "curionSubmitMode"
   ]);
+  await chrome.storage.local.remove("curionApiUrl");
   metadataSource = resolveMetadataSource(stored);
-  apiUrlInput.value = stored.curionApiUrl || DEFAULT_API_URL;
   userIdInput.value = stored.curionUserId || "";
   backendProfileInput.checked = Boolean(stored.curionUseBackendProfile);
   autoFillInput.checked = Boolean(stored.curionAutoFillEnabled);
@@ -140,7 +137,6 @@ async function loadProfile() {
 async function saveBehaviorSettings() {
   await chrome.storage.local.set({
     curionUserId: userIdInput.value.trim(),
-    curionApiUrl: apiUrlInput.value.trim(),
     curionUseBackendProfile: backendProfileInput.checked,
     curionAutoFillEnabled: autoFillInput.checked,
     curionSubmitMode: submitModeInput.value,
@@ -164,9 +160,9 @@ async function syncBackendProfile() {
     throw new Error("Backend profile user ID is required.");
   }
 
-  const ingestUrl = ingestUrlFromMappingUrl(apiUrlInput.value || DEFAULT_API_URL);
+  const ingestUrl = ingestUrlFromMappingUrl(DEFAULT_API_URL);
   if (!ingestUrl) {
-    throw new Error("Backend API URL is required.");
+    throw new Error("Backend endpoint is not configured.");
   }
 
   const workingMetadata = workingJsonEditor.value.trim()
@@ -179,7 +175,6 @@ async function syncBackendProfile() {
     chrome.runtime.sendMessage(
       {
         type: "CURION_SYNC_BACKEND_PROFILE",
-        apiUrl: apiUrlInput.value.trim() || DEFAULT_API_URL,
         userId,
         profile
       },
@@ -200,7 +195,6 @@ async function syncBackendProfile() {
 
   await chrome.storage.local.set({
     curionUserId: userId,
-    curionApiUrl: apiUrlInput.value.trim(),
     curionUseBackendProfile: true,
     curionMetadataSource: metadataSource
   });
@@ -334,10 +328,6 @@ backendProfileInput.addEventListener("change", () => {
 });
 
 userIdInput.addEventListener("change", () => {
-  saveBehaviorSettings().catch((error: any) => setStatus(error.message));
-});
-
-apiUrlInput.addEventListener("change", () => {
   saveBehaviorSettings().catch((error: any) => setStatus(error.message));
 });
 

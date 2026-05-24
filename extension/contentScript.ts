@@ -82,7 +82,6 @@ type PageSnapshot = {
  *   curionWorkingMetadata?: Dict;
  *   curionProfile?: Dict;
  *   curionUseBackendProfile?: boolean;
- *   curionApiUrl?: string;
  *   curionUserId?: string;
  *   curionSubmitMode?: string;
  *   curionAutoFillEnabled?: boolean;
@@ -352,16 +351,13 @@ function collectPageSnapshot() {
 function usingStoredBackendProfile(settings) {
   return Boolean(
     settings?.curionUseBackendProfile &&
-      String(settings?.curionUserId || "").trim() &&
-      String(settings?.curionApiUrl || DEFAULT_API_URL).trim()
+      String(settings?.curionUserId || "").trim()
   );
 }
 
 /** @param {Settings} settings @param {Dict | null} profileOverride */
 async function analyzeWithStoredBackendProfile(settings, profileOverride = null) {
-  const apiUrl = String(settings?.curionApiUrl || DEFAULT_API_URL).trim();
   const userId = String(settings?.curionUserId || "").trim();
-  if (!apiUrl) return null;
 
   const pageSnapshot = collectPageSnapshot();
   const activeProfile = profileOverride && hasProfile(profileOverride)
@@ -380,7 +376,7 @@ async function analyzeWithStoredBackendProfile(settings, profileOverride = null)
     return null;
   }
 
-  const response = await fetch(apiUrl, {
+  const response = await fetch(DEFAULT_API_URL, {
     method: "POST",
     body: JSON.stringify(requestBody)
   });
@@ -506,7 +502,6 @@ async function readBackendSettings() {
     "curionProfile",
     "curionWorkingMetadata",
     "curionMetadataSource",
-    "curionApiUrl",
     "curionUserId",
     "curionUseBackendProfile",
     "curionSubmitMode"
@@ -833,7 +828,6 @@ async function maybeAutoFill() {
     "curionProfile",
     "curionWorkingMetadata",
     "curionMetadataSource",
-    "curionApiUrl",
     "curionUserId",
     "curionUseBackendProfile",
     "curionSubmitMode"
@@ -841,7 +835,6 @@ async function maybeAutoFill() {
 
   if (!stored.curionAutoFillEnabled) return;
   const profile = activeProfileFromSettings(stored);
-  if (!String(stored.curionApiUrl || DEFAULT_API_URL).trim()) return;
   if (!usingStoredBackendProfile(stored) && !hasProfile(profile)) return;
   if (getControls().length === 0) return;
 

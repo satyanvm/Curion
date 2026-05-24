@@ -92,7 +92,7 @@ From this `backend` folder:
 npx vercel --prod
 ```
 
-Then paste the deployed endpoint into the Curion extension options page:
+The Curion extension is pinned to the deployed mapping endpoint:
 
 ```text
 https://backend-three-mu-84.vercel.app/api/agent/map-form

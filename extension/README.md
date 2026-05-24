@@ -72,7 +72,7 @@ Keep the extension JSON path for individuals. Use API-fed metadata for business 
 
 For local `file://` HTML form tests, open `chrome://extensions`, expand Curion details, and enable **Allow access to file URLs**. Chrome blocks content scripts on local files until that switch is enabled.
 
-The extension uses the backend endpoint as the single mapping pipeline. The content script extracts DOM fields and fills returned mappings; semantic matching and LLM fallback happen in `POST /api/agent/map-form`.
+The extension uses the deployed backend endpoint as the fixed mapping pipeline. The content script extracts DOM fields and fills returned mappings; semantic matching and LLM fallback happen in `POST /api/agent/map-form`.
 
 ## Backend API
 
@@ -89,7 +89,7 @@ The popup sends `profile`, `fields`, `html`, `goal`, and page context for transi
 | File | Role |
 |------|------|
 | `profileSchema.ts` | Shared profile keys, sample data, sanitization |
-| `options.html` / `options.ts` | Default metadata, working JSON, API URL, and behavior settings |
+| `options.html` / `options.ts` | Default metadata, working JSON, backend profile user ID, and behavior settings |
 | `popup.html` / `popup.ts` | Scan, review, fill, unfill |
 | `contentScript.ts` | DOM extraction, backend mapping calls, auto-fill, unfill, direct submit |
 | `background.ts` | Handles backend profile sync requests from the options page |
