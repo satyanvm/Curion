@@ -20,8 +20,6 @@
     const form = document.getElementById("profileForm");
     const jsonEditor = document.getElementById("jsonEditor");
     const workingJsonEditor = document.getElementById("workingJsonEditor");
-    const userIdInput = document.getElementById("userIdInput");
-    const backendProfileInput = document.getElementById("backendProfileInput");
     const autoFillInput = document.getElementById("autoFillInput");
     const submitModeInput = document.getElementById("submitModeInput");
     const statusElement = document.getElementById("status");
@@ -55,12 +53,7 @@
         const source = String(stored?.curionMetadataSource || "");
         if (source === "saved" || source === "working")
             return source;
-        return hasMetadata(stored?.curionWorkingMetadata) ? "working" : "saved";
-    }
-    function activeProfileForSettings(savedProfile, workingMetadata) {
-        if (metadataSource === "saved")
-            return savedProfile;
-        return hasMetadata(workingMetadata) ? workingMetadata : savedProfile;
+        return "saved";
     }
     function setStatus(message) {
         statusElement.textContent = message;
@@ -90,16 +83,58 @@
         workingJsonEditor.value = active ? JSON.stringify(metadata, null, 2) : "";
         updateWorkingStats(active ? metadata : {});
     }
+    function ingestUrlFromMappingUrl(mappingUrl) {
+        const trimmed = String(mappingUrl || "").trim();
+        if (!trimmed)
+            return "";
+        if (trimmed.endsWith("/api/agent/map-form")) {
+            return `${trimmed.slice(0, -"/api/agent/map-form".length)}/api/profile/ingest`;
+        }
+        return trimmed.replace(/\/agent\/map-form\/?$/, "/profile/ingest");
+    }
+    async function savedProfileUserId() {
+        const stored = await chrome.storage.local.get(["curionUserId"]);
+        const existing = String(stored.curionUserId || "").trim();
+        if (existing)
+            return existing;
+        const generated = `curion_${crypto.randomUUID()}`;
+        await chrome.storage.local.set({ curionUserId: generated });
+        return generated;
+    }
+    async function syncSavedProfile(profile, userId) {
+        const ingestUrl = ingestUrlFromMappingUrl(DEFAULT_API_URL);
+        if (!ingestUrl) {
+            throw new Error("Backend endpoint is not configured.");
+        }
+        const response = await fetch(ingestUrl, {
+            method: "POST",
+            headers: {
+                "Content-Type": "text/plain;charset=UTF-8"
+            },
+            body: JSON.stringify({ userId, profile })
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            throw new Error(payload.error || `Backend profile save failed with status ${response.status}`);
+        }
+        return payload;
+    }
     async function saveProfile(profile) {
+        const userId = await savedProfileUserId();
+        setStatus("Saving profile to backend...");
+        const result = await syncSavedProfile(profile, userId);
+        metadataSource = "saved";
         await chrome.storage.local.set({
             curionProfile: profile,
-            curionUserId: userIdInput.value.trim(),
-            curionUseBackendProfile: backendProfileInput.checked,
+            curionUserId: userId,
+            curionUseBackendProfile: true,
             curionAutoFillEnabled: autoFillInput.checked,
-            curionSubmitMode: submitModeInput.value
+            curionSubmitMode: submitModeInput.value,
+            curionMetadataSource: metadataSource
         });
         render(profile);
-        setStatus("Profile and behavior settings saved locally.");
+        renderMetadataSourceButtons();
+        setStatus(`Saved profile is active. ${result.atomCount || 0} backend atoms stored.`);
     }
     async function loadProfile() {
         const stored = await chrome.storage.local.get([
@@ -113,8 +148,6 @@
         ]);
         await chrome.storage.local.remove("curionApiUrl");
         metadataSource = resolveMetadataSource(stored);
-        userIdInput.value = stored.curionUserId || "";
-        backendProfileInput.checked = Boolean(stored.curionUseBackendProfile);
         autoFillInput.checked = Boolean(stored.curionAutoFillEnabled);
         submitModeInput.value = stored.curionSubmitMode || "review";
         render(stored.curionProfile || SAMPLE_PROFILE);
@@ -123,62 +156,17 @@
     }
     async function saveBehaviorSettings() {
         await chrome.storage.local.set({
-            curionUserId: userIdInput.value.trim(),
-            curionUseBackendProfile: backendProfileInput.checked,
             curionAutoFillEnabled: autoFillInput.checked,
             curionSubmitMode: submitModeInput.value,
             curionMetadataSource: metadataSource
         });
         setStatus("Behavior settings saved.");
     }
-    function ingestUrlFromMappingUrl(mappingUrl) {
-        const trimmed = String(mappingUrl || "").trim();
-        if (!trimmed)
-            return "";
-        if (trimmed.endsWith("/api/agent/map-form")) {
-            return `${trimmed.slice(0, -"/api/agent/map-form".length)}/api/profile/ingest`;
-        }
-        return trimmed.replace(/\/agent\/map-form\/?$/, "/profile/ingest");
-    }
-    async function syncBackendProfile() {
-        const userId = userIdInput.value.trim();
-        if (!userId) {
-            throw new Error("Backend profile user ID is required.");
-        }
-        const ingestUrl = ingestUrlFromMappingUrl(DEFAULT_API_URL);
-        if (!ingestUrl) {
-            throw new Error("Backend endpoint is not configured.");
-        }
-        const workingMetadata = workingJsonEditor.value.trim()
-            ? JSON.parse(workingJsonEditor.value)
-            : {};
-        const profile = activeProfileForSettings(formToProfile(), workingMetadata);
-        setStatus(`Syncing profile atoms to backend: ${ingestUrl}`);
-        const result = await new Promise((resolve, reject) => {
-            chrome.runtime.sendMessage({
-                type: "CURION_SYNC_BACKEND_PROFILE",
-                userId,
-                profile
-            }, (response) => {
-                const error = chrome.runtime.lastError;
-                if (error) {
-                    reject(new Error(error.message || `Backend sync request failed for ${ingestUrl}`));
-                    return;
-                }
-                if (!response?.ok) {
-                    reject(new Error(response?.error || `Backend sync failed for ${ingestUrl}`));
-                    return;
-                }
-                resolve(response.payload || {});
-            });
-        });
-        await chrome.storage.local.set({
-            curionUserId: userId,
-            curionUseBackendProfile: true,
-            curionMetadataSource: metadataSource
-        });
-        backendProfileInput.checked = true;
-        setStatus(`Backend profile synced for ${userId}. ${result.atomCount || 0} atoms stored.`);
+    async function saveWorkingDraft(parsed, statusMessage) {
+        await chrome.storage.local.set({ curionWorkingMetadata: parsed });
+        renderWorkingMetadata(parsed);
+        renderMetadataSourceButtons();
+        setStatus(statusMessage);
     }
     async function saveWorkingJson() {
         if (!workingJsonEditor.value.trim()) {
@@ -208,11 +196,8 @@
         setStatus("Working metadata cleared. Curion will use the saved profile.");
     }
     async function useSavedProfile() {
-        metadataSource = "saved";
-        await chrome.storage.local.set({ curionMetadataSource: metadataSource });
-        renderMetadataSourceButtons();
+        await saveProfile(formToProfile());
         useSavedProfileButton.focus();
-        setStatus("Saved profile is now active.");
     }
     function exportProfile() {
         const profile = formToProfile();
@@ -255,7 +240,10 @@
             const parsed = JSON.parse(raw);
             if (!isPlainObject(parsed))
                 return;
-            applyWorkingJson(parsed, "Working JSON updated.").catch((error) => setStatus(error.message));
+            const message = metadataSource === "working"
+                ? "Working JSON updated."
+                : "Working JSON saved. Click Use working JSON to activate it.";
+            saveWorkingDraft(parsed, message).catch((error) => setStatus(error.message));
         }
         catch {
             // Leave invalid JSON for manual correction.
@@ -270,7 +258,10 @@
                 const parsed = JSON.parse(raw);
                 if (!isPlainObject(parsed))
                     return;
-                applyWorkingJson(parsed, "Working JSON pasted and activated.").catch((error) => setStatus(error.message));
+                const message = metadataSource === "working"
+                    ? "Working JSON updated."
+                    : "Working JSON pasted. Click Use working JSON to activate it.";
+                saveWorkingDraft(parsed, message).catch((error) => setStatus(error.message));
             }
             catch {
                 // Ignore invalid paste content until the user saves explicitly.
@@ -287,15 +278,6 @@
     });
     submitModeInput.addEventListener("change", () => {
         saveBehaviorSettings().catch((error) => setStatus(error.message));
-    });
-    backendProfileInput.addEventListener("change", () => {
-        saveBehaviorSettings().catch((error) => setStatus(error.message));
-    });
-    userIdInput.addEventListener("change", () => {
-        saveBehaviorSettings().catch((error) => setStatus(error.message));
-    });
-    document.getElementById("syncBackendButton")?.addEventListener("click", () => {
-        syncBackendProfile().catch((error) => setStatus(error.message || "Backend sync failed."));
     });
     document.getElementById("copyJsonButton")?.addEventListener("click", () => {
         navigator.clipboard.writeText(jsonEditor.value).then(() => setStatus("JSON copied."), () => setStatus("Copy failed."));

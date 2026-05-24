@@ -31,8 +31,8 @@
      *   fields: FieldInfo[];
      *   fieldCount: number;
      *   goal: string;
-     *   userId?: string;
      *   profile?: Dict;
+     *   userId?: string;
      * }} PageSnapshot */
     /** @typedef {{
      *   url: string;
@@ -47,8 +47,8 @@
      *   curionMetadataSource?: string;
      *   curionWorkingMetadata?: Dict;
      *   curionProfile?: Dict;
-     *   curionUseBackendProfile?: boolean;
      *   curionUserId?: string;
+     *   curionUseBackendProfile?: boolean;
      *   curionSubmitMode?: string;
      *   curionAutoFillEnabled?: boolean;
      * }} Settings */
@@ -269,7 +269,7 @@
         const source = String(settings?.curionMetadataSource || "");
         if (source === "saved" || source === "working")
             return source;
-        return hasProfile(settings?.curionWorkingMetadata) ? "working" : "saved";
+        return "saved";
     }
     function activeProfileFromSettings(settings) {
         const source = resolveMetadataSource(settings);
@@ -278,6 +278,13 @@
         return hasProfile(settings.curionWorkingMetadata)
             ? settings.curionWorkingMetadata
             : settings.curionProfile || {};
+    }
+    function savedBackendUserId(settings) {
+        if (resolveMetadataSource(settings) === "working")
+            return "";
+        if (settings?.curionUseBackendProfile === false)
+            return "";
+        return String(settings?.curionUserId || "").trim();
     }
     function collectPageSnapshot() {
         const fields = extractFields();
@@ -289,14 +296,10 @@
             fieldCount: fields.length
         };
     }
-    function usingStoredBackendProfile(settings) {
-        return Boolean(settings?.curionUseBackendProfile &&
-            String(settings?.curionUserId || "").trim());
-    }
     /** @param {Settings} settings @param {Dict | null} profileOverride */
     async function analyzeWithStoredBackendProfile(settings, profileOverride = null) {
-        const userId = String(settings?.curionUserId || "").trim();
         const pageSnapshot = collectPageSnapshot();
+        const userId = savedBackendUserId(settings);
         const activeProfile = profileOverride && hasProfile(profileOverride)
             ? profileOverride
             : activeProfileFromSettings(settings);
@@ -304,7 +307,7 @@
             goal: "Fill this page with the active Curion metadata.",
             ...pageSnapshot
         };
-        if (settings?.curionUseBackendProfile && userId) {
+        if (userId) {
             requestBody.userId = userId;
         }
         else if (hasProfile(activeProfile)) {
@@ -487,9 +490,8 @@
             fieldCount: controls.length,
             labels: controls.slice(0, 40).map(labelFor),
             profileKeys: Object.keys(profile || {}).filter((key) => String(profile[key] || "").trim()).sort(),
-            metadataSource: resolveMetadataSource(settings),
-            useBackendProfile: usingStoredBackendProfile(settings),
-            userId: String(settings?.curionUserId || "").trim()
+            profileUserId: savedBackendUserId(settings),
+            metadataSource: resolveMetadataSource(settings)
         });
     }
     function promptStyles() {
@@ -735,7 +737,7 @@
         if (!stored.curionAutoFillEnabled)
             return;
         const profile = activeProfileFromSettings(stored);
-        if (!usingStoredBackendProfile(stored) && !hasProfile(profile))
+        if (!savedBackendUserId(stored) && !hasProfile(profile))
             return;
         if (getControls().length === 0)
             return;
