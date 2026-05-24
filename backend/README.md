@@ -22,6 +22,16 @@ Request body:
 
 This endpoint flattens nested profile metadata into semantic atoms, embeds only structural descriptors with `gemini-embedding-2`, and stores the raw value separately in Supabase. Derived name atoms use the same `firstName` / `lastName` path shape everywhere.
 
+`GET /api/extension/download`
+
+Serves the current Curion extension ZIP package as a download. By default it fetches:
+
+```text
+https://curion.sbs/curion-extension.zip
+```
+
+Set `CURION_EXTENSION_DOWNLOAD_URL` in Vercel if the package moves to a different host or file name.
+
 `POST /api/agent/map-form`
 
 Request body:
@@ -70,6 +80,7 @@ Set these in Vercel:
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `CURION_MAPPING_MAX_DISTANCE` optional, defaults to `0.42`
 - `CURION_MAPPING_MATCH_COUNT` optional, defaults to `5`
+- `CURION_EXTENSION_DOWNLOAD_URL` optional, defaults to `https://curion.sbs/curion-extension.zip`
 
 Run [backend/sql/profile_atoms.sql](/Users/satyanarayan/projects/Automation_bot_form_filling/project/backend/sql/profile_atoms.sql) in the Supabase SQL editor before deploying.
 
