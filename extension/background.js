@@ -17,9 +17,9 @@
         if (!userId) {
             throw new Error("Backend profile user ID is required.");
         }
-        const ingestUrl = ingestUrlFromMappingUrl(request?.apiUrl || DEFAULT_API_URL);
+        const ingestUrl = ingestUrlFromMappingUrl(DEFAULT_API_URL);
         if (!ingestUrl) {
-            throw new Error("Backend API URL is required.");
+            throw new Error("Backend endpoint is not configured.");
         }
         const response = await fetch(ingestUrl, {
             method: "POST",

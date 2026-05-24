@@ -20,7 +20,6 @@
     const form = document.getElementById("profileForm");
     const jsonEditor = document.getElementById("jsonEditor");
     const workingJsonEditor = document.getElementById("workingJsonEditor");
-    const apiUrlInput = document.getElementById("apiUrlInput");
     const userIdInput = document.getElementById("userIdInput");
     const backendProfileInput = document.getElementById("backendProfileInput");
     const autoFillInput = document.getElementById("autoFillInput");
@@ -94,7 +93,6 @@
     async function saveProfile(profile) {
         await chrome.storage.local.set({
             curionProfile: profile,
-            curionApiUrl: apiUrlInput.value.trim(),
             curionUserId: userIdInput.value.trim(),
             curionUseBackendProfile: backendProfileInput.checked,
             curionAutoFillEnabled: autoFillInput.checked,
@@ -108,14 +106,13 @@
             "curionProfile",
             "curionWorkingMetadata",
             "curionMetadataSource",
-            "curionApiUrl",
             "curionUserId",
             "curionUseBackendProfile",
             "curionAutoFillEnabled",
             "curionSubmitMode"
         ]);
+        await chrome.storage.local.remove("curionApiUrl");
         metadataSource = resolveMetadataSource(stored);
-        apiUrlInput.value = stored.curionApiUrl || DEFAULT_API_URL;
         userIdInput.value = stored.curionUserId || "";
         backendProfileInput.checked = Boolean(stored.curionUseBackendProfile);
         autoFillInput.checked = Boolean(stored.curionAutoFillEnabled);
@@ -127,7 +124,6 @@
     async function saveBehaviorSettings() {
         await chrome.storage.local.set({
             curionUserId: userIdInput.value.trim(),
-            curionApiUrl: apiUrlInput.value.trim(),
             curionUseBackendProfile: backendProfileInput.checked,
             curionAutoFillEnabled: autoFillInput.checked,
             curionSubmitMode: submitModeInput.value,
@@ -149,9 +145,9 @@
         if (!userId) {
             throw new Error("Backend profile user ID is required.");
         }
-        const ingestUrl = ingestUrlFromMappingUrl(apiUrlInput.value || DEFAULT_API_URL);
+        const ingestUrl = ingestUrlFromMappingUrl(DEFAULT_API_URL);
         if (!ingestUrl) {
-            throw new Error("Backend API URL is required.");
+            throw new Error("Backend endpoint is not configured.");
         }
         const workingMetadata = workingJsonEditor.value.trim()
             ? JSON.parse(workingJsonEditor.value)
@@ -161,7 +157,6 @@
         const result = await new Promise((resolve, reject) => {
             chrome.runtime.sendMessage({
                 type: "CURION_SYNC_BACKEND_PROFILE",
-                apiUrl: apiUrlInput.value.trim() || DEFAULT_API_URL,
                 userId,
                 profile
             }, (response) => {
@@ -179,7 +174,6 @@
         });
         await chrome.storage.local.set({
             curionUserId: userId,
-            curionApiUrl: apiUrlInput.value.trim(),
             curionUseBackendProfile: true,
             curionMetadataSource: metadataSource
         });
@@ -298,9 +292,6 @@
         saveBehaviorSettings().catch((error) => setStatus(error.message));
     });
     userIdInput.addEventListener("change", () => {
-        saveBehaviorSettings().catch((error) => setStatus(error.message));
-    });
-    apiUrlInput.addEventListener("change", () => {
         saveBehaviorSettings().catch((error) => setStatus(error.message));
     });
     document.getElementById("syncBackendButton")?.addEventListener("click", () => {

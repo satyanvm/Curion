@@ -139,7 +139,7 @@ const installSteps = [
 const postInstallItems = [
   {
     title: "Options",
-    body: "Add your profile fields, backend API URL, and fill behavior."
+    body: "Add your profile fields, backend profile user ID, and fill behavior."
   },
   {
     title: "Scan",

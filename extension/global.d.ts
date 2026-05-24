@@ -17,6 +17,7 @@ declare const chrome: {
     local: {
       get(keys: string[] | Record<string, any>): Promise<Record<string, any>>;
       set(values: Record<string, any>): Promise<void>;
+      remove(keys: string | string[]): Promise<void>;
     };
   };
   tabs: {

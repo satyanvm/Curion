@@ -5,7 +5,6 @@ type State = {
   workingMetadata: AnyRecord;
   activeMetadata: AnyRecord | null;
   metadataSource: string;
-  apiUrl: string;
   userId: string;
   useBackendProfile: boolean;
   submitMode: string;
@@ -38,7 +37,6 @@ const state: State = {
   workingMetadata: {},
   activeMetadata: null,
   metadataSource: "saved",
-  apiUrl: "",
   userId: "",
   useBackendProfile: false,
   submitMode: "review",
@@ -101,7 +99,6 @@ async function loadProfile() {
     "curionProfile",
     "curionWorkingMetadata",
     "curionMetadataSource",
-    "curionApiUrl",
     "curionUserId",
     "curionUseBackendProfile",
     "curionAutoFillEnabled",
@@ -114,7 +111,6 @@ async function loadProfile() {
     : {};
   state.metadataSource = resolveMetadataSource(stored);
   state.activeMetadata = activeMetadataFromState(state.profile, state.workingMetadata, state.metadataSource);
-  state.apiUrl = stored.curionApiUrl || DEFAULT_API_URL;
   state.userId = String(stored.curionUserId || "").trim();
   state.useBackendProfile = Boolean(stored.curionUseBackendProfile && state.userId);
   state.submitMode = stored.curionSubmitMode || "review";
@@ -249,11 +245,6 @@ async function scanPage() {
 
   elements.pageStatus.textContent = "Scanning current page...";
 
-  if (!state.apiUrl) {
-    elements.pageStatus.textContent = "Backend API URL is required for scans";
-    return;
-  }
-
   const pageSnapshot = await sendToActiveTab({ type: "CURION_COLLECT_PAGE" });
   const mappingPayload = state.useBackendProfile
     ? {
@@ -266,7 +257,7 @@ async function scanPage() {
         ...pageSnapshot,
         profile: state.activeMetadata
       };
-  const response = await fetch(state.apiUrl, {
+  const response = await fetch(DEFAULT_API_URL, {
     method: "POST",
     body: JSON.stringify(mappingPayload)
   });
