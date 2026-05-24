@@ -75,7 +75,7 @@ async function main(): Promise<void> {
     console.log(`Field extraction source: ${extractionSource}`);
     console.log(`Extraction confidence: ${extractionReport.overallScore.toFixed(2)}`);
     console.log(
-      `HTML adequacy: ${htmlAdequacyReport.overallScore.toFixed(2)} (${htmlAdequacyReport.recommendedFallback})`
+      `HTML adequacy: ${htmlAdequacyReport.htmlAdequacyScore.toFixed(2)} (${htmlAdequacyReport.recommendedFallback})`
     );
     console.log(`Mapping confidence: ${mappingReport.overallScore.toFixed(2)}`);
     console.log("Mapping decisions:");

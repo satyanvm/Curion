@@ -128,7 +128,7 @@ export async function calculateHtmlAdequacy(
   score += visibleTextCoverage * 0.14;
   score += clamp(1 - machineGeneratedAttributeRatio) * 0.06;
   score += clamp(1 - customWidgetSuspicion) * 0.04;
-  const overallScore = clamp(score);
+  const htmlAdequacyScore = clamp(score);
 
   const reasons: string[] = [];
   const weaknesses: string[] = [];
@@ -160,16 +160,16 @@ export async function calculateHtmlAdequacy(
   }
 
   let recommendedFallback: HtmlAdequacyReport["recommendedFallback"] = "none";
-  if (overallScore >= 0.72 && extractionReport.shouldUseLLM) {
+  if (htmlAdequacyScore >= 0.72 && extractionReport.shouldUseLLM) {
     recommendedFallback = "llm-html";
-  } else if (overallScore >= 0.5 && extractionReport.shouldUseLLM) {
+  } else if (htmlAdequacyScore >= 0.5 && extractionReport.shouldUseLLM) {
     recommendedFallback = "dom-repair";
-  } else if (overallScore < 0.5 && extractionReport.shouldUseLLM) {
+  } else if (htmlAdequacyScore < 0.5 && extractionReport.shouldUseLLM) {
     recommendedFallback = "vision";
   }
 
   return {
-    overallScore,
+    htmlAdequacyScore,
     recommendedFallback,
     reasons,
     weaknesses,
