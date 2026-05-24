@@ -6,7 +6,7 @@
   "scripts": {
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "build:extension": "tsc -p tsconfig.node.json",
-    "package:extension": "npm run build:extension && npm exec -- tsc -p ../extension/tsconfig.json && node ./.cache/build-extension.js",
+    "package:extension": "npm run build:extension && node ./.cache/build-extension.js",
     "predev": "npm run package:extension",
     "dev": "vite",
     "prebuild": "npm run package:extension",

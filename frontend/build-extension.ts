@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -16,8 +17,15 @@ const publicPackagePath = path.join(publicDir, "curion-extension.zip");
 const brandMarkPath = path.join(frontendDir, "curion-mark.png");
 const publicBrandMarkPath = path.join(publicDir, "curion-mark.png");
 
-fs.mkdirSync(iconDir, { recursive: true });
 fs.mkdirSync(publicDir, { recursive: true });
+
+if (!fs.existsSync(extensionDir)) {
+  copyExistingPackage();
+  process.exit(0);
+}
+
+compileExtension();
+fs.mkdirSync(iconDir, { recursive: true });
 
 for (const size of [16, 32, 48, 128]) {
   const iconPath = path.join(iconDir, `icon${size}.png`);
@@ -36,6 +44,34 @@ console.log(`Built ${path.relative(rootDir, packagePath)}`);
 console.log(`Built ${path.relative(rootDir, publicPackagePath)}`);
 console.log(`Built ${path.relative(rootDir, brandMarkPath)}`);
 console.log(`Built ${path.relative(rootDir, publicBrandMarkPath)}`);
+
+function compileExtension() {
+  const result = spawnSync(
+    "npm",
+    ["exec", "--", "tsc", "-p", path.join(extensionDir, "tsconfig.json")],
+    { cwd: frontendDir, stdio: "inherit" }
+  );
+
+  if (result.status !== 0) {
+    process.exit(result.status ?? 1);
+  }
+}
+
+function copyExistingPackage() {
+  if (!fs.existsSync(packagePath) || !fs.existsSync(brandMarkPath)) {
+    throw new Error(
+      "Extension source is unavailable and the packaged frontend artifacts are missing."
+    );
+  }
+
+  fs.copyFileSync(packagePath, publicPackagePath);
+  fs.copyFileSync(brandMarkPath, publicBrandMarkPath);
+
+  console.log(`Reused ${path.relative(rootDir, packagePath)}`);
+  console.log(`Built ${path.relative(rootDir, publicPackagePath)}`);
+  console.log(`Reused ${path.relative(rootDir, brandMarkPath)}`);
+  console.log(`Built ${path.relative(rootDir, publicBrandMarkPath)}`);
+}
 
 function findFrontendDir(startDir) {
   let currentDir = startDir;
