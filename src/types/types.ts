@@ -80,7 +80,7 @@ export type ExtractionFallbackRecommendation =
   | "vision";
 
 export interface HtmlAdequacyReport {
-  overallScore: number;
+  htmlAdequacyScore: number;
   recommendedFallback: ExtractionFallbackRecommendation;
   reasons: string[];
   weaknesses: string[];
