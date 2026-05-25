@@ -2,6 +2,7 @@ import { Page } from "playwright";
 import { extractFields } from "./extractFields";
 import { calculateExtractionConfidence } from "../confidence/extractionConfidence";
 import { calculateHtmlAdequacy } from "../confidence/htmlAdequacy";
+import { repairDomFields } from "./repairDomFields";
 import { extractFieldsWithLLM } from "../llm/extractFieldsWithLLM";
 import { ExtractionConfidenceReport, FormField, HtmlAdequacyReport } from "../types/types";
 
@@ -75,11 +76,15 @@ export async function extractFormFields(page: Page): Promise<ExtractedFieldSet> 
   }
 
   if (htmlAdequacyReport.recommendedFallback === "dom-repair") {
+    const repairedFields = await repairDomFields(page, domFields);
+    const repairedReport = calculateExtractionConfidence(repairedFields);
+    const repairedAdequacyReport = await calculateHtmlAdequacy(page, repairedFields, repairedReport);
+
     return {
-      fields: domFields,
+      fields: repairedFields,
       extractionSource: "dom",
-      report: domReport,
-      htmlAdequacyReport,
+      report: repairedReport,
+      htmlAdequacyReport: repairedAdequacyReport,
       deferredLlmExtraction: false,
     };
   }
