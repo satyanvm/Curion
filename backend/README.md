@@ -66,9 +66,10 @@ Response body:
 The mapping endpoint is the single mapping pipeline used by the extension and CLI test runner:
 
 1. DOM-extracted fields are embedded as retrieval queries.
-2. Profile atoms are matched semantically from Supabase when `userId` is supplied, or from the transient `profile` payload for local demos.
-3. Low-confidence or unmapped fields are sent to Gemini as an LLM fallback and resolved back to stored profile atoms.
-4. Vision fallback is intentionally not implemented yet.
+2. If extraction confidence falls below `0.68`, Gemini repairs the field extraction from the submitted HTML, the backend merges repaired fields, and extraction confidence is recalculated.
+3. Profile atoms are matched semantically from Supabase when `userId` is supplied, or from the transient `profile` payload for local demos.
+4. Low-confidence or unmapped mappings are sent to Gemini as an LLM fallback and resolved back to stored profile atoms.
+5. Vision fallback is intentionally not implemented yet.
 
 ## Environment Variables
 

@@ -1,0 +1,276 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2400" height="2400" viewBox="0 0 2400 2400" role="img" aria-labelledby="title desc">
+  <title id="title">Curion shipped extension and backend architecture</title>
+  <desc id="desc">A swimlane architecture diagram for Curion's shipped Chrome extension and backend pipeline, including extraction confidence, semantic matching, LLM fallback, and fill/review behavior.</desc>
+  <defs>
+    <filter id="shadow" x="-18%" y="-18%" width="136%" height="136%">
+      <feDropShadow dx="0" dy="10" stdDeviation="14" flood-color="#111111" flood-opacity="0.10" />
+    </filter>
+    <marker id="arrow" markerWidth="15" markerHeight="15" refX="12" refY="7.5" orient="auto">
+      <path d="M0,0 L15,7.5 L0,15 Z" fill="#242424" />
+    </marker>
+    <marker id="arrowGreen" markerWidth="15" markerHeight="15" refX="12" refY="7.5" orient="auto">
+      <path d="M0,0 L15,7.5 L0,15 Z" fill="#1b7f4d" />
+    </marker>
+    <marker id="arrowAmber" markerWidth="15" markerHeight="15" refX="12" refY="7.5" orient="auto">
+      <path d="M0,0 L15,7.5 L0,15 Z" fill="#b86b00" />
+    </marker>
+    <marker id="arrowBlue" markerWidth="15" markerHeight="15" refX="12" refY="7.5" orient="auto">
+      <path d="M0,0 L15,7.5 L0,15 Z" fill="#2867a8" />
+    </marker>
+    <style>
+      .page { fill: #f7f7f4; }
+      .frame { fill: none; stroke: #151515; stroke-width: 2.4; }
+      .lane { fill: #ffffff; stroke: #d5d5cf; stroke-width: 2; }
+      .laneTitle { font: 800 18px Arial, Helvetica, sans-serif; fill: #111111; letter-spacing: 1.5px; text-transform: uppercase; }
+      .title { font: 850 43px Arial, Helvetica, sans-serif; fill: #111111; }
+      .subtitle { font: 500 18px Arial, Helvetica, sans-serif; fill: #343434; }
+      .tiny { font: 700 12px Arial, Helvetica, sans-serif; fill: #4b4b4b; letter-spacing: 1px; text-transform: uppercase; }
+      .box { fill: #ffffff; stroke: #1d1d1d; stroke-width: 2.2; filter: url(#shadow); }
+      .boxGreen { fill: #f2fbf6; stroke: #1b7f4d; stroke-width: 2.5; filter: url(#shadow); }
+      .boxAmber { fill: #fff8ec; stroke: #b86b00; stroke-width: 2.5; filter: url(#shadow); }
+      .boxBlue { fill: #f1f7ff; stroke: #2867a8; stroke-width: 2.5; filter: url(#shadow); }
+      .soft { fill: #f1f1ee; stroke: #d7d7d0; stroke-width: 1.7; }
+      .diamond { fill: #ffffff; stroke: #1d1d1d; stroke-width: 2.4; filter: url(#shadow); }
+      .service { fill: #f1f7ff; stroke: #2867a8; stroke-width: 2.5; filter: url(#shadow); }
+      .note { fill: #fbfbf8; stroke: #d8d8d1; stroke-width: 1.7; }
+      .head { font: 800 24px Arial, Helvetica, sans-serif; fill: #111111; }
+      .body { font: 500 17px Arial, Helvetica, sans-serif; fill: #272727; }
+      .small { font: 500 14px Arial, Helvetica, sans-serif; fill: #4a4a4a; }
+      .mono { font: 700 14px Menlo, Consolas, "Courier New", monospace; fill: #111111; }
+      .label { font: 850 13px Arial, Helvetica, sans-serif; fill: #111111; letter-spacing: 1px; text-transform: uppercase; }
+      .yesLabel { font: 850 14px Arial, Helvetica, sans-serif; fill: #1b7f4d; letter-spacing: 1px; text-transform: uppercase; }
+      .noLabel { font: 850 14px Arial, Helvetica, sans-serif; fill: #b86b00; letter-spacing: 1px; text-transform: uppercase; }
+      .arrow { fill: none; stroke: #242424; stroke-width: 3.2; marker-end: url(#arrow); }
+      .arrowGreen { fill: none; stroke: #1b7f4d; stroke-width: 3.2; marker-end: url(#arrowGreen); }
+      .arrowAmber { fill: none; stroke: #b86b00; stroke-width: 3.2; marker-end: url(#arrowAmber); }
+      .arrowBlue { fill: none; stroke: #2867a8; stroke-width: 3; marker-end: url(#arrowBlue); }
+      .dataLine { fill: none; stroke: #2867a8; stroke-width: 2.4; stroke-dasharray: 9 8; marker-end: url(#arrowBlue); }
+    </style>
+  </defs>
+
+  <rect class="page" x="0" y="0" width="2400" height="2400" />
+  <rect class="frame" x="32" y="32" width="2336" height="2336" rx="28" />
+
+  <text class="title" x="78" y="88">Curion Shipped Extension + Backend Architecture</text>
+  <text class="subtitle" x="80" y="125">
+    <tspan x="80" dy="0">Chrome extension runtime and deployed backend flow: DOM snapshot -&gt; extraction confidence -&gt; optional extraction repair -&gt; semantic match -&gt; mapping fallback -&gt; fill/review.</tspan>
+    <tspan x="80" dy="25">Focus: production path used by </tspan><tspan class="mono">extension/*</tspan><tspan class="subtitle"> and </tspan><tspan class="mono">backend/api/*</tspan><tspan class="subtitle">.</tspan>
+  </text>
+
+  <rect class="soft" x="1585" y="66" width="730" height="82" rx="16" />
+  <text class="small" x="1610" y="94">
+    <tspan x="1610" dy="0">Legend: green = trusted path, amber = extraction or mapping fallback, blue = external AI/data service.</tspan>
+    <tspan x="1610" dy="23">Low extraction confidence now triggers Gemini extraction repair; no DOM repair or vision branch.</tspan>
+  </text>
+
+  <rect class="lane" x="70" y="190" width="620" height="2180" rx="24" />
+  <rect class="lane" x="740" y="190" width="850" height="2180" rx="24" />
+  <rect class="lane" x="1640" y="190" width="690" height="2180" rx="24" />
+
+  <text class="laneTitle" x="110" y="232">Browser Extension</text>
+  <text class="laneTitle" x="780" y="232">Backend API</text>
+  <text class="laneTitle" x="1680" y="232">AI + Data Services</text>
+
+  <text class="tiny" x="105" y="272">Profile setup path</text>
+
+  <rect class="box" x="120" y="295" width="520" height="126" rx="18" />
+  <text class="head" x="148" y="333">Options Page Saves Profile</text>
+  <text class="body" x="148" y="365">
+    <tspan x="148" dy="0">User edits saved metadata or imports JSON.</tspan>
+    <tspan x="148" dy="24">The extension stores settings locally.</tspan>
+  </text>
+
+  <rect class="box" x="810" y="295" width="360" height="126" rx="18" />
+  <text class="head" x="838" y="333">Profile Ingest API</text>
+  <text class="mono" x="838" y="365">POST /api/profile/ingest</text>
+  <text class="small" x="838" y="390">Requires userId + profile object.</text>
+
+  <rect class="box" x="1200" y="295" width="330" height="126" rx="18" />
+  <text class="head" x="1228" y="333">Profile Atoms</text>
+  <text class="body" x="1228" y="365">
+    <tspan x="1228" dy="0">Flatten profile keys.</tspan>
+    <tspan x="1228" dy="24">Derive first/last name atoms.</tspan>
+  </text>
+
+  <rect class="service" x="1695" y="295" width="275" height="126" rx="18" />
+  <text class="head" x="1723" y="333">Embeddings</text>
+  <text class="body" x="1723" y="365">
+    <tspan x="1723" dy="0">Gemini</tspan>
+    <tspan x="1723" dy="24">embedding-2</tspan>
+  </text>
+
+  <rect class="service" x="2010" y="295" width="270" height="126" rx="18" />
+  <text class="head" x="2038" y="333">Supabase</text>
+  <text class="body" x="2038" y="365">
+    <tspan x="2038" dy="0">profile_atoms</tspan>
+    <tspan x="2038" dy="24">raw values + vectors</tspan>
+  </text>
+
+  <path class="arrow" d="M640 358 L810 358" />
+  <path class="arrow" d="M1170 358 L1200 358" />
+  <path class="arrowBlue" d="M1530 358 L1695 358" />
+  <path class="arrowBlue" d="M1970 358 L2010 358" />
+
+  <text class="tiny" x="105" y="500">Runtime mapping path</text>
+
+  <rect class="box" x="120" y="525" width="520" height="124" rx="18" />
+  <text class="head" x="148" y="563">Popup or Auto Prompt</text>
+  <text class="body" x="148" y="594">
+    <tspan x="148" dy="0">Reads enabled state, submit mode, userId,</tspan>
+    <tspan x="148" dy="24">saved profile, or working JSON override.</tspan>
+  </text>
+
+  <rect class="box" x="120" y="715" width="520" height="174" rx="18" />
+  <text class="head" x="148" y="753">Content Script Snapshot</text>
+  <text class="body" x="148" y="784">
+    <tspan x="148" dy="0">Extracts visible input, textarea, and select controls.</tspan>
+    <tspan x="148" dy="24">Captures label, selector, type, name, placeholder,</tspan>
+    <tspan x="148" dy="24">options, URL, title, and full page HTML.</tspan>
+  </text>
+  <text class="small" x="148" y="861">Filters hidden, disabled, search, file, and extension-owned controls.</text>
+
+  <rect class="box" x="900" y="715" width="520" height="140" rx="18" />
+  <text class="head" x="928" y="753">Mapping API Entry</text>
+  <text class="mono" x="928" y="784">POST /api/agent/map-form</text>
+  <text class="body" x="928" y="815">
+    <tspan x="928" dy="0">Receives fields + page context + userId or transient profile.</tspan>
+  </text>
+
+  <path class="arrow" d="M640 802 L900 802" />
+  <path class="arrow" d="M380 649 L380 715" />
+
+  <rect class="box" x="900" y="930" width="520" height="156" rx="18" />
+  <text class="head" x="928" y="968">Sanitize + Extraction Confidence</text>
+  <text class="body" x="928" y="999">
+    <tspan x="928" dy="0">Normalizes each field and scores extraction quality from</tspan>
+    <tspan x="928" dy="24">label source, label readability, selector strength, and type.</tspan>
+  </text>
+  <text class="small" x="928" y="1061">Low extraction triggers repair before the mapping stage.</text>
+
+  <path class="arrow" d="M1160 855 L1160 930" />
+
+  <polygon class="diamond" points="1160,1115 1352,1225 1160,1335 968,1225" />
+  <text class="head" x="1056" y="1203">Extraction score</text>
+  <text class="head" x="1084" y="1231">&gt;= 0.68?</text>
+  <text class="small" x="1051" y="1260">Average field quality gate</text>
+
+  <path class="arrow" d="M1160 1086 L1160 1115" />
+
+  <rect class="boxGreen" x="800" y="1420" width="350" height="132" rx="18" />
+  <text class="head" x="828" y="1458">Yes Path</text>
+  <text class="body" x="828" y="1490">
+    <tspan x="828" dy="0">Use DOM snapshot as</tspan>
+    <tspan x="828" dy="24">trusted extraction input.</tspan>
+  </text>
+  <text class="small" x="828" y="1529">Continue to semantic retrieval.</text>
+
+  <rect class="boxAmber" x="1220" y="1420" width="350" height="150" rx="18" />
+  <text class="head" x="1248" y="1458">No Path</text>
+  <text class="body" x="1248" y="1490">
+    <tspan x="1248" dy="0">Run Gemini extraction</tspan>
+    <tspan x="1248" dy="24">repair from page HTML.</tspan>
+  </text>
+  <text class="small" x="1248" y="1533">Merge fields, then recalculate confidence.</text>
+
+  <path class="arrowGreen" d="M1011 1254 C930 1320, 920 1354, 975 1420" />
+  <path class="arrowAmber" d="M1310 1254 C1400 1320, 1402 1354, 1395 1420" />
+  <text class="yesLabel" x="907" y="1366">YES</text>
+  <text class="noLabel" x="1432" y="1366">NO</text>
+
+  <rect class="box" x="900" y="1630" width="520" height="142" rx="18" />
+  <text class="head" x="928" y="1668">Build Queries + Load Atoms</text>
+  <text class="body" x="928" y="1699">
+    <tspan x="928" dy="0">Creates embedding text for every form field.</tspan>
+    <tspan x="928" dy="24">Loads Supabase atoms by userId, or embeds a transient profile.</tspan>
+  </text>
+  <text class="small" x="928" y="1753">Field hints include email, phone, URL, name, address, consent, and notes.</text>
+
+  <path class="arrowGreen" d="M975 1552 L975 1590 L1160 1590 L1160 1630" />
+  <path class="arrowAmber" d="M1395 1570 L1395 1590 L1160 1590 L1160 1630" />
+
+  <rect class="service" x="1695" y="760" width="585" height="150" rx="18" />
+  <text class="head" x="1723" y="798">Gemini Embedding Service</text>
+  <text class="body" x="1723" y="830">
+    <tspan x="1723" dy="0">Creates profile document vectors during ingest</tspan>
+    <tspan x="1723" dy="24">and field query vectors during mapping.</tspan>
+  </text>
+  <text class="small" x="1723" y="886">Model default: gemini-embedding-2, 768 dimensions.</text>
+
+  <rect class="service" x="1695" y="990" width="585" height="150" rx="18" />
+  <text class="head" x="1723" y="1028">Supabase Vector Store</text>
+  <text class="body" x="1723" y="1060">
+    <tspan x="1723" dy="0">Stores raw profile values separately from vector text.</tspan>
+    <tspan x="1723" dy="24">RPC match_profile_atoms_batch returns nearest atoms.</tspan>
+  </text>
+
+  <path class="dataLine" d="M1420 1698 L1620 1698 L1620 835 L1695 835" />
+  <path class="dataLine" d="M1420 1726 L1620 1726 L1620 1065 L1695 1065" />
+
+  <rect class="box" x="900" y="1830" width="520" height="132" rx="18" />
+  <text class="head" x="928" y="1868">Semantic Vector Matching</text>
+  <text class="body" x="928" y="1900">
+    <tspan x="928" dy="0">Ranks compatible profile atoms for every field.</tspan>
+    <tspan x="928" dy="24">Rejects type mismatches such as email vs phone or URL.</tspan>
+  </text>
+  <text class="small" x="928" y="1942">A field maps when best confidence &gt;= 0.62 and winner gap &gt;= 0.015.</text>
+
+  <path class="arrow" d="M1160 1772 L1160 1830" />
+
+  <polygon class="diamond" points="1160,1998 1342,2102 1160,2206 978,2102" />
+  <text class="head" x="1061" y="2077">Trust mapping?</text>
+  <text class="small" x="1030" y="2104">Review below 0.78 or small gap</text>
+  <text class="small" x="1039" y="2126">LLM if unmapped or overall &lt; 0.78</text>
+
+  <path class="arrow" d="M1160 1962 L1160 1998" />
+
+  <rect class="service" x="1695" y="2025" width="585" height="160" rx="18" />
+  <text class="head" x="1723" y="2063">Gemini JSON Fallback</text>
+  <text class="body" x="1723" y="2095">
+    <tspan x="1723" dy="0">Only resolves weak or unmapped fields after</tspan>
+    <tspan x="1723" dy="24">semantic matching runs first.</tspan>
+  </text>
+  <text class="small" x="1723" y="2149">Must choose stored semanticPath values; no invented profile values.</text>
+
+  <rect class="box" x="900" y="2238" width="520" height="116" rx="18" />
+  <text class="head" x="928" y="2276">Return Mapping Report</text>
+  <text class="body" x="928" y="2307">
+    <tspan x="928" dy="0">Returns mappings, mappedCount, overallConfidence,</tspan>
+    <tspan x="928" dy="24">reviewRequired, extractionReport, and mappingReport.</tspan>
+  </text>
+
+  <path class="arrowGreen" d="M1160 2206 L1160 2238" />
+  <path class="arrowAmber" d="M1342 2102 C1460 2102, 1535 2105, 1695 2105" />
+  <path class="arrowAmber" d="M1695 2165 C1580 2245, 1490 2296, 1420 2296" />
+  <text class="yesLabel" x="1110" y="2228">YES</text>
+  <text class="noLabel" x="1498" y="2088">NO</text>
+
+  <rect class="boxGreen" x="120" y="2238" width="520" height="116" rx="18" />
+  <text class="head" x="148" y="2276">Fill, Review, or Submit</text>
+  <text class="body" x="148" y="2307">
+    <tspan x="148" dy="0">Extension verifies mapping compatibility, fills controls,</tspan>
+    <tspan x="148" dy="24">shows review prompt, or submits when direct mode is enabled.</tspan>
+  </text>
+
+  <path class="arrowGreen" d="M900 2296 L640 2296" />
+
+  <rect class="note" x="120" y="930" width="520" height="130" rx="16" />
+  <text class="head" x="148" y="968">Metadata Choice</text>
+  <text class="body" x="148" y="999">
+    <tspan x="148" dy="0">Saved profile mode sends only userId.</tspan>
+    <tspan x="148" dy="24">Working JSON mode sends transient profile data.</tspan>
+  </text>
+  <text class="small" x="148" y="1042">Both modes use the same mapping endpoint.</text>
+
+  <path class="arrow" d="M380 889 L380 930" />
+  <path class="arrow" d="M640 995 C730 995, 795 802, 900 802" />
+
+  <rect class="service" x="1695" y="1220" width="585" height="150" rx="18" />
+  <text class="head" x="1723" y="1258">Gemini Extraction Repair</text>
+  <text class="body" x="1723" y="1290">
+    <tspan x="1723" dy="0">Runs when extraction score is below 0.68,</tspan>
+    <tspan x="1723" dy="24">weak field ratio is high, or a repair action is flagged.</tspan>
+  </text>
+  <text class="small" x="1723" y="1344">Returns fields[] only; backend merges and rescans confidence.</text>
+
+  <path class="arrowAmber" d="M1570 1495 L1620 1495 L1620 1295 L1695 1295" />
+</svg>
