@@ -71,7 +71,7 @@ Keep the extension JSON path for individuals. Use API-fed metadata for business 
 
 For local `file://` HTML form tests, open `chrome://extensions`, expand Curion details, and enable **Allow access to file URLs**. Chrome blocks content scripts on local files until that switch is enabled.
 
-The extension uses the deployed backend endpoint as the fixed mapping pipeline. The content script extracts DOM fields and fills returned mappings; semantic matching and LLM fallback happen in `POST /api/agent/map-form`.
+The extension uses the deployed backend endpoint as the fixed mapping pipeline. The content script extracts DOM fields and fills returned mappings; extraction repair, semantic matching, and LLM mapping fallback happen in `POST /api/agent/map-form`.
 
 ## Backend API
 
@@ -81,7 +81,7 @@ Default endpoint:
 https://backend-three-mu-84.vercel.app/api/agent/map-form
 ```
 
-The popup sends `userId`, `fields`, `html`, `goal`, and page context when **Saved profile** is active, which makes the backend query stored Supabase vector atoms. If **Working JSON** is active, it sends the transient `profile` payload instead. The backend then runs semantic matching first and Gemini fallback only for low-confidence/unmapped fields. See `backend/README.md`.
+The popup sends `userId`, `fields`, `html`, `goal`, and page context when **Saved profile** is active, which makes the backend query stored Supabase vector atoms. If **Working JSON** is active, it sends the transient `profile` payload instead. The backend repairs low-confidence extraction when needed, then runs semantic matching first and Gemini mapping fallback only for low-confidence/unmapped mappings. See `backend/README.md`.
 
 ## Files
 

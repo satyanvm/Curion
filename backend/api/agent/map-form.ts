@@ -16,7 +16,10 @@ import { generateJsonWithGemini, isGeminiConfigured } from "../_lib/gemini.js";
 const DEFAULT_MATCH_COUNT = 5;
 const DEFAULT_MAX_DISTANCE = 0.42;
 const HTML_SNIPPET_LIMIT = 12000;
+const LLM_EXTRACTION_HTML_LIMIT = 25000;
+const EXTRACTION_CONFIDENCE_THRESHOLD = 0.68;
 const LLM_MAPPING_CONFIDENCE = 0.78;
+const LLM_EXTRACTED_FIELD_LIMIT = 120;
 
 const PROFILE_SCHEMA = {
   firstName: "A person's first or given name.",
@@ -239,6 +242,164 @@ async function applyLlmFallback(body, fields, mappings, source, userId, extracti
   } catch (error) {
     warnings.push(`Gemini fallback failed: ${error instanceof Error ? error.message : "unknown error"}`);
     return { mappings, source, warnings };
+  }
+}
+
+function normalizeFieldType(type) {
+  const normalized = String(type || "text").toLowerCase();
+  if (["text", "email", "tel", "url", "number", "date", "select", "textarea", "checkbox", "radio"].includes(normalized)) {
+    return normalized;
+  }
+  return "text";
+}
+
+function parseLlmExtractedFields(fields) {
+  if (!Array.isArray(fields)) return [];
+
+  return fields
+    .slice(0, LLM_EXTRACTED_FIELD_LIMIT)
+    .map((field, index) => ({
+      id: String(field?.id || field?.selector || field?.name || `llm-field-${index + 1}`),
+      index: -1,
+      label: String(field?.label || field?.name || field?.placeholder || `Field ${index + 1}`)
+        .replace(/\s+/g, " ")
+        .trim(),
+      selector: String(field?.selector || "").trim(),
+      type: normalizeFieldType(field?.type),
+      labelSource: "llm",
+      name: String(field?.name || ""),
+      placeholder: String(field?.placeholder || ""),
+      options: Array.isArray(field?.options) ? field.options.map(String).filter(Boolean).slice(0, 60) : []
+    }))
+    .filter((field) => field.selector && field.label);
+}
+
+function shouldPreferLlmLabel(field) {
+  const normalizedLabel = normalizeText(field.label);
+  const normalizedName = normalizeText(field.name);
+  const normalizedId = normalizeText(field.id);
+
+  return (
+    !isReadableText(field.label) ||
+    /^field\s+\d+$/i.test(String(field.label || "")) ||
+    normalizedLabel === normalizedName ||
+    normalizedLabel === normalizedId
+  );
+}
+
+function mergeExtractedFields(domFields, llmFields) {
+  const merged = new Map();
+
+  for (const field of domFields || []) {
+    const key = field?.selector || `__field_${field?.index}`;
+    merged.set(key, field);
+  }
+
+  for (const llmField of llmFields || []) {
+    const existing = merged.get(llmField.selector);
+    if (!existing) {
+      merged.set(llmField.selector, llmField);
+      continue;
+    }
+
+    const llmLabelLooksReadable = isReadableText(llmField.label);
+    const useLlmLabel = llmLabelLooksReadable && shouldPreferLlmLabel(existing);
+
+    merged.set(llmField.selector, {
+      ...existing,
+      label: useLlmLabel ? llmField.label : existing.label,
+      labelSource: llmLabelLooksReadable ? "llm" : existing.labelSource,
+      type: existing.type === "text" ? llmField.type : existing.type,
+      name: existing.name || llmField.name,
+      placeholder: existing.placeholder || llmField.placeholder,
+      options: existing.options?.length ? existing.options : llmField.options
+    });
+  }
+
+  return Array.from(merged.values());
+}
+
+function shouldUseLlmExtraction(extractionReport) {
+  return (
+    extractionReport.overallScore < EXTRACTION_CONFIDENCE_THRESHOLD ||
+    extractionReport.weakFieldRatio >= 0.35 ||
+    extractionReport.fieldReports.some((report) => report.recommendedAction === "repair-field-extraction")
+  );
+}
+
+function buildLlmExtractionPrompt(body, fields, extractionReport) {
+  return {
+    goal: body?.goal || "Extract fillable form fields for Curion form filling.",
+    url: body?.url || "",
+    title: body?.title || "",
+    htmlSnippet: body?.html ? String(body.html).slice(0, LLM_EXTRACTION_HTML_LIMIT) : "",
+    currentFields: fields,
+    extractionReport,
+    expectedJsonShape: {
+      fields: [
+        {
+          label: "Human readable label",
+          selector: "CSS selector for the exact fillable control",
+          type: "text|email|tel|url|select|textarea|checkbox|radio|number|date",
+          name: "optional name attribute",
+          placeholder: "optional placeholder",
+          options: ["only for select/radio-like controls"]
+        }
+      ]
+    }
+  };
+}
+
+async function applyLlmExtractionFallback(body, fields, extractionReport, warnings) {
+  if (!shouldUseLlmExtraction(extractionReport)) {
+    return { fields, extractionReport, usedLlmExtraction: false };
+  }
+
+  if (!isGeminiConfigured()) {
+    warnings.push("Extraction confidence was low, but Gemini is not configured for extraction repair");
+    return { fields, extractionReport, usedLlmExtraction: false };
+  }
+
+  if (!body?.html) {
+    warnings.push("Extraction confidence was low, but page HTML was not supplied for extraction repair");
+    return { fields, extractionReport, usedLlmExtraction: false };
+  }
+
+  try {
+    const content = await generateJsonWithGemini(
+      [
+        "Repair low-confidence HTML form field extraction for Curion.",
+        "Return strict JSON with a top-level fields array only.",
+        "Each field must describe an existing fillable input, textarea, or select element in the provided HTML.",
+        "Use stable CSS selectors from existing id, name, aria, placeholder, or structural attributes.",
+        "Do not include hidden, disabled, password, file, submit, reset, image, or search controls.",
+        "Preserve current fields when they are valid, repair unclear labels, and add missing fillable controls.",
+        "Do not invent controls that are not present in the HTML."
+      ].join(" "),
+      buildLlmExtractionPrompt(body, fields, extractionReport)
+    );
+
+    const parsed = JSON.parse(content) as { fields?: any[] };
+    const llmFields = parseLlmExtractedFields(parsed?.fields);
+    if (llmFields.length === 0) {
+      warnings.push("Gemini extraction repair returned no usable fields");
+      return { fields, extractionReport, usedLlmExtraction: false };
+    }
+
+    const mergedFields = mergeExtractedFields(fields, llmFields);
+    const repairedReport = calculateExtractionConfidence(mergedFields);
+    warnings.push(
+      `Gemini repaired extraction after confidence ${extractionReport.overallScore.toFixed(2)} fell below ${EXTRACTION_CONFIDENCE_THRESHOLD.toFixed(2)}`
+    );
+
+    return {
+      fields: mergedFields,
+      extractionReport: repairedReport,
+      usedLlmExtraction: true
+    };
+  } catch (error) {
+    warnings.push(`Gemini extraction repair failed: ${error instanceof Error ? error.message : "unknown error"}`);
+    return { fields, extractionReport, usedLlmExtraction: false };
   }
 }
 
@@ -663,17 +824,22 @@ export default async function handler(request, response) {
   try {
     const body = parseRequestBody(request.body);
     const userId = String(body.userId || "").trim();
-    const fields = Array.isArray(body.fields) ? body.fields.map(sanitizeField) : [];
-    const extractionReport = calculateExtractionConfidence(fields);
+    let fields = Array.isArray(body.fields) ? body.fields.map(sanitizeField) : [];
+    let extractionReport = calculateExtractionConfidence(fields);
+    const warnings = [];
+
+    const extractionResult = await applyLlmExtractionFallback(body, fields, extractionReport, warnings);
+    fields = extractionResult.fields;
+    extractionReport = extractionResult.extractionReport;
+    const extractionSourceSuffix = extractionResult.usedLlmExtraction ? "+llm-extraction" : "";
 
     if (fields.length === 0) {
-      json(response, 200, summarize([], extractionReport, "semantic-vector", []), request);
+      json(response, 200, summarize([], extractionReport, `semantic-vector${extractionSourceSuffix}`, warnings), request);
       return;
     }
 
     const fieldTexts = fields.map((field) => embeddingTextForField(field, body));
     const fieldEmbeddings = await batchEmbedTexts(fieldTexts, "RETRIEVAL_QUERY");
-    const warnings = [];
     let mappings;
     let source;
 
@@ -683,7 +849,7 @@ export default async function handler(request, response) {
         embeddings: fieldEmbeddings
       });
       mappings = mappingsFromMatches(fields, matches, extractionReport);
-      source = "semantic-vector";
+      source = `semantic-vector${extractionSourceSuffix}`;
     } else if (body.profile && typeof body.profile === "object" && !Array.isArray(body.profile)) {
       mappings = await mapWithTransientProfile({
         fields,
@@ -691,7 +857,7 @@ export default async function handler(request, response) {
         profile: body.profile,
         extractionReport
       });
-      source = "semantic-vector-transient-profile";
+      source = `semantic-vector-transient-profile${extractionSourceSuffix}`;
       warnings.push("No userId was supplied; mapped against transient profile payload instead of Supabase atoms");
     } else {
       throw new Error("userId is required unless a transient profile object is supplied");
