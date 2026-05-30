@@ -156,15 +156,18 @@ function renderProfileState() {
   const metadataLabel = ready
       ? (usingWorkingMetadata ? "Working metadata" : "Saved profile")
       : "No metadata";
+  const submitModeLabel = state.submitMode === "workflow"
+    ? "Workflow automation"
+    : state.submitMode === "direct"
+      ? "Direct submit"
+      : "Review before submit";
 
   elements.profileWarning.hidden = ready;
   elements.scanButton.disabled = !ready || !enabled;
   elements.fillButton.disabled = true;
   elements.enableInput.checked = enabled;
   elements.metadataMode.textContent = `${metadataLabel}${enabled ? " · enabled" : " · off"}`;
-  elements.submitMode.textContent = state.submitMode === "direct"
-    ? "Direct submit"
-    : "Review before submit";
+  elements.submitMode.textContent = submitModeLabel;
 
   if (!ready) {
     elements.pageStatus.textContent = "Add metadata or use sample data to test";
@@ -274,10 +277,12 @@ async function scanPage() {
 function submitStatusText(result: AnyRecord, noun: string) {
   const filled = result.filledCount || 0;
   if (result.submit?.submitted) {
-    return `Filled ${filled} ${noun} and submitted`;
+    const actionLabel = result.submit.label ? ` via ${result.submit.label}` : "";
+    const verb = result.submit.action === "workflow" ? "continued" : "submitted";
+    return `Filled ${filled} ${noun} and ${verb}${actionLabel}`;
   }
-  if (state.submitMode === "direct" && filled > 0) {
-    return `Filled ${filled} ${noun}; no form submit target found`;
+  if ((state.submitMode === "direct" || state.submitMode === "workflow") && filled > 0) {
+    return `Filled ${filled} ${noun}; ${result.submit?.reason || "no submit or next target found"}`;
   }
   return `Filled ${filled} ${noun}`;
 }
