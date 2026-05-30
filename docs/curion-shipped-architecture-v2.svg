@@ -60,7 +60,7 @@
   <rect class="soft" x="1585" y="66" width="730" height="82" rx="16" />
   <text class="small" x="1610" y="94">
     <tspan x="1610" dy="0">Legend: green = trusted path, amber = extraction or mapping fallback, blue = external AI/data service.</tspan>
-    <tspan x="1610" dy="23">Low extraction confidence now triggers Gemini extraction repair; no DOM repair or vision branch.</tspan>
+    <tspan x="1610" dy="23">After one extraction repair, score still below 0.68 sets reviewRequired true; mapping continues.</tspan>
   </text>
 
   <rect class="lane" x="70" y="190" width="620" height="2180" rx="24" />
@@ -170,7 +170,7 @@
     <tspan x="1248" dy="0">Run Gemini extraction</tspan>
     <tspan x="1248" dy="24">repair from page HTML.</tspan>
   </text>
-  <text class="small" x="1248" y="1533">Merge fields, then recalculate confidence.</text>
+  <text class="small" x="1248" y="1533">Still below 0.68: reviewRequired true.</text>
 
   <path class="arrowGreen" d="M1011 1254 C930 1320, 920 1354, 975 1420" />
   <path class="arrowAmber" d="M1310 1254 C1400 1320, 1402 1354, 1395 1420" />
@@ -270,7 +270,7 @@
     <tspan x="1723" dy="0">Runs when extraction score is below 0.68,</tspan>
     <tspan x="1723" dy="24">weak field ratio is high, or a repair action is flagged.</tspan>
   </text>
-  <text class="small" x="1723" y="1344">Returns fields[] only; backend merges and rescans confidence.</text>
+  <text class="small" x="1723" y="1344">Backend merges, rescans, forces review if still below 0.68.</text>
 
   <path class="arrowAmber" d="M1570 1495 L1620 1495 L1620 1295 L1695 1295" />
 </svg>

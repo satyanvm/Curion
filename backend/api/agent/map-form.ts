@@ -388,13 +388,22 @@ async function applyLlmExtractionFallback(body, fields, extractionReport, warnin
 
     const mergedFields = mergeExtractedFields(fields, llmFields);
     const repairedReport = calculateExtractionConfidence(mergedFields);
+    const finalExtractionReport = repairedReport.overallScore < EXTRACTION_CONFIDENCE_THRESHOLD
+      ? { ...repairedReport, reviewRequired: true }
+      : repairedReport;
     warnings.push(
       `Gemini repaired extraction after confidence ${extractionReport.overallScore.toFixed(2)} fell below ${EXTRACTION_CONFIDENCE_THRESHOLD.toFixed(2)}`
     );
 
+    if (repairedReport.overallScore < EXTRACTION_CONFIDENCE_THRESHOLD) {
+      warnings.push(
+        `Extraction confidence remained ${repairedReport.overallScore.toFixed(2)} after Gemini repair; review is required`
+      );
+    }
+
     return {
       fields: mergedFields,
-      extractionReport: repairedReport,
+      extractionReport: finalExtractionReport,
       usedLlmExtraction: true
     };
   } catch (error) {
@@ -799,6 +808,7 @@ function summarize(mappings, extractionReport, source, warnings = []) {
     mappedCount,
     overallConfidence,
     reviewRequired:
+      Boolean(extractionReport.reviewRequired) ||
       overallConfidence < 0.8 ||
       mappings.some((entry) => !entry.mapping || entry.mapping.reviewRequired),
     extractionReport,
