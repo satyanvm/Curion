@@ -21,7 +21,7 @@ Open **Curion -> Extension options**.
 - The working JSON editor starts empty so you can paste a fresh payload directly.
 - Clear working metadata to fall back to the saved profile.
 - Enable **Curion scanning and form filling**.
-- Choose **Ask for review before submit** or **Directly submit after filling**.
+- Choose **Ask for review before submit**, **Directly submit after filling**, or **Auto-submit and continue workflow**.
 - Import/export JSON for backup or migration.
 
 This is the right model for personal profiles, solo workflows, and quick demos because the saved profile is explicit and the working JSON override remains temporary.
@@ -68,6 +68,7 @@ Keep the extension JSON path for individuals. Use API-fed metadata for business 
 4. Enable Curion scanning and form filling in options.
 5. When Curion detects a form, it sends the DOM snapshot to the backend mapping API.
 6. Use the popup to scan, fill, or unfill visible controls manually.
+7. For high-volume internal workflows, choose **Auto-submit and continue workflow** to let Curion fill mapped fields and click the best visible submit, next, continue, save-and-next, or finish action. Required visible fields that remain empty stop the automatic click.
 
 For local `file://` HTML form tests, open `chrome://extensions`, expand Curion details, and enable **Allow access to file URLs**. Chrome blocks content scripts on local files until that switch is enabled.
 
@@ -90,4 +91,4 @@ The popup sends `userId`, `fields`, `html`, `goal`, and page context when **Save
 | `profileSchema.ts` | Shared profile keys, sample data, sanitization |
 | `options.html` / `options.ts` | Default metadata, working JSON, and behavior settings |
 | `popup.html` / `popup.ts` | Scan, review, fill, unfill |
-| `contentScript.ts` | DOM extraction, backend mapping calls, auto-fill, unfill, direct submit |
+| `contentScript.ts` | DOM extraction, backend mapping calls, auto-fill, unfill, direct submit, workflow continuation |

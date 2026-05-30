@@ -409,8 +409,8 @@ async function fillWithBackendProfile(settings, profileOverride = null) {
   const result = fillReturnedMappings(analysis.mappings || []) as AnyRecord;
   const submitMode = settings?.curionSubmitMode || "review";
 
-  if (submitMode === "direct" && result.filledCount > 0) {
-    result.submit = submitBestForm();
+  if ((submitMode === "direct" || submitMode === "workflow") && result.filledCount > 0) {
+    result.submit = runPostFillAction(submitMode);
   }
 
   return {
@@ -526,13 +526,133 @@ function formScore(form) {
   }).length;
 }
 
-function submitBestForm() {
+function isElementVisible(element) {
+  if (!(element instanceof HTMLElement)) return false;
+  if (element.closest("#curion-root")) return false;
+  if ("disabled" in element && element.disabled) return false;
+  if (element.getAttribute("aria-disabled") === "true") return false;
+
+  const style = window.getComputedStyle(element);
+  if (style.display === "none" || style.visibility === "hidden" || style.opacity === "0") return false;
+
+  const rect = element.getBoundingClientRect();
+  return rect.width > 0 && rect.height > 0;
+}
+
+function actionText(element) {
+  const el = element as HTMLElement;
+  return normalize([
+    el.textContent,
+    el.getAttribute("aria-label"),
+    el.getAttribute("title"),
+    el.getAttribute("name"),
+    el.id,
+    el.getAttribute("value"),
+    el.className
+  ].join(" "));
+}
+
+function hasActionTerm(text, terms) {
+  return terms.some((term) => {
+    const normalizedTerm = normalize(term);
+    return normalizedTerm.includes(" ")
+      ? text.includes(normalizedTerm)
+      : text.split(" ").includes(normalizedTerm);
+  });
+}
+
+function buttonLabel(element) {
+  if (!(element instanceof HTMLElement)) return "selected action";
+  return (
+    element.textContent ||
+    element.getAttribute("aria-label") ||
+    element.getAttribute("value") ||
+    element.getAttribute("name") ||
+    element.id ||
+    "selected action"
+  ).replace(/\s+/g, " ").trim();
+}
+
+function bestForm() {
   const forms = Array.from(document.forms)
     .map((form) => ({ form, score: formScore(form) }))
     .filter((entry) => entry.score > 0)
     .sort((a, b) => b.score - a.score);
 
-  const target = forms[0]?.form || getControls()[0]?.closest("form");
+  return forms[0]?.form || getControls()[0]?.closest("form");
+}
+
+function scoreWorkflowAction(element, preferredForm) {
+  if (!(element instanceof HTMLElement) || !isElementVisible(element)) return 0;
+
+  const tag = element.tagName.toLowerCase();
+  const type = (element.getAttribute("type") || "").toLowerCase();
+  const role = element.getAttribute("role");
+  if (!["button", "input", "a"].includes(tag) && role !== "button") return 0;
+  if (tag === "input" && !["submit", "button"].includes(type)) return 0;
+  if (type === "reset" || type === "file" || type === "image") return 0;
+
+  const text = actionText(element);
+  if (!text) return 0;
+  if (hasActionTerm(text, ["back", "previous", "cancel", "clear", "reset", "delete", "remove", "close", "logout", "sign out", "search", "filter"])) {
+    return 0;
+  }
+
+  let score = 0;
+  if (type === "submit") score += 25;
+  if (preferredForm && element.closest("form") === preferredForm) score += 18;
+  if (hasActionTerm(text, ["save and next", "save next", "submit and next", "submit next", "next step"])) score += 55;
+  if (hasActionTerm(text, ["submit", "send", "continue", "next", "proceed", "finish", "complete", "done"])) score += 42;
+  if (hasActionTerm(text, ["save"])) score += 24;
+
+  return score;
+}
+
+function findWorkflowAction(preferredForm = null) {
+  const selectors = [
+    "button",
+    "input[type='submit']",
+    "input[type='button']",
+    "[role='button']",
+    "a[href]"
+  ].join(",");
+  const candidates = Array.from(document.querySelectorAll(selectors))
+    .map((element) => ({ element, score: scoreWorkflowAction(element, preferredForm) }))
+    .filter((entry) => entry.score > 0)
+    .sort((a, b) => b.score - a.score);
+
+  return candidates[0]?.element || null;
+}
+
+function controlHasValue(control) {
+  if (control instanceof HTMLInputElement) {
+    const type = (control.getAttribute("type") || "").toLowerCase();
+    if (type === "checkbox") return control.checked;
+    if (type === "radio") {
+      const groupName = control.name;
+      const group = groupName
+        ? Array.from(document.querySelectorAll(`input[type="radio"][name="${CSS.escape(groupName)}"]`))
+        : [control];
+      return group.some((item) => item instanceof HTMLInputElement && item.checked);
+    }
+    return Boolean(control.value.trim());
+  }
+
+  if (control instanceof HTMLTextAreaElement) return Boolean(control.value.trim());
+  if (control instanceof HTMLSelectElement) return Boolean(control.value);
+  return false;
+}
+
+function emptyRequiredControls(root) {
+  return Array.from(root.querySelectorAll("input, textarea, select")).filter((control) => {
+    if (!(control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement || control instanceof HTMLSelectElement)) return false;
+    if (!control.required || !isElementVisible(control)) return false;
+    return !controlHasValue(control);
+  });
+}
+
+function submitBestForm() {
+  const target = bestForm();
   if (!target) {
     return { submitted: false, reason: "No form found" };
   }
@@ -540,6 +660,7 @@ function submitBestForm() {
   const submitter = target.querySelector(
     'button[type="submit"], input[type="submit"], button:not([type])'
   );
+  const label = submitter instanceof HTMLElement ? buttonLabel(submitter) : "form submit";
 
   if (submitter instanceof HTMLElement) {
     submitter.click();
@@ -549,7 +670,39 @@ function submitBestForm() {
     target.submit();
   }
 
-  return { submitted: true };
+  return { submitted: true, action: "submit", label };
+}
+
+function runWorkflowAction() {
+  const target = bestForm();
+  const missingRequired = emptyRequiredControls(target || document);
+  if (missingRequired.length > 0) {
+    return {
+      submitted: false,
+      reason: `${missingRequired.length} required ${pluralize(missingRequired.length, "field")} still need input`
+    };
+  }
+
+  const action = findWorkflowAction(target);
+  if (!action || !(action instanceof HTMLElement)) {
+    return { submitted: false, reason: "No submit or next action found" };
+  }
+
+  const label = buttonLabel(action);
+  action.click();
+  return { submitted: true, action: "workflow", label };
+}
+
+function runPostFillAction(submitMode) {
+  if (submitMode === "workflow") {
+    return runWorkflowAction();
+  }
+
+  return submitBestForm();
+}
+
+function isWorkflowMode(settings) {
+  return settings?.curionSubmitMode === "workflow";
 }
 
 /** @type {number | null} */
@@ -569,7 +722,8 @@ function buildAutoFillSignature(profile, settings) {
     labels: controls.slice(0, 40).map(labelFor),
     profileKeys: Object.keys(profile || {}).filter((key) => String(profile[key] || "").trim()).sort(),
     profileUserId: savedBackendUserId(settings),
-    metadataSource: resolveMetadataSource(settings)
+    metadataSource: resolveMetadataSource(settings),
+    submitMode: settings?.curionSubmitMode || "review"
   });
 }
 
@@ -781,15 +935,17 @@ function renderCurionPrompt(analysis, message) {
       ? fillReturnedMappings(analysis.mappings || [])
       : await fillWithBackendProfile(stored);
 
-    if (analysis?.source && submitMode === "direct" && result.filledCount > 0) {
-      result.submit = submitBestForm();
+    if (analysis?.source && (submitMode === "direct" || submitMode === "workflow") && result.filledCount > 0) {
+      result.submit = runPostFillAction(submitMode);
     }
 
     const totalFields = Number(result.fieldCount || analysis.fieldCount || 0);
     const remaining = Math.max(0, totalFields - result.filledCount);
     const skipped = analysis?.source ? unmappedLabels(analysis) : unmappedLabels(result);
 
-    messageElement.textContent = remaining
+    messageElement.textContent = result.submit?.submitted
+      ? `Curion filled ${result.filledCount} ${pluralize(result.filledCount, "field")} and ${result.submit.action === "workflow" ? "continued" : "submitted"}.`
+      : remaining
       ? `Curion filled ${result.filledCount} ${pluralize(result.filledCount, "field")}. ${remaining} ${pluralize(remaining, "field")} need your input.`
       : `Curion filled all ${result.filledCount} matched ${pluralize(result.filledCount, "field")}.`;
     fieldsElement.textContent = `${totalFields} ${pluralize(totalFields, "field")}`;
@@ -843,6 +999,17 @@ async function maybeAutoFill() {
   if (!shouldOfferAutoFill(analysis)) {
     removeCurionPrompt();
     return;
+  }
+
+  if (isWorkflowMode(stored) && analysis.mappedCount > 0) {
+    const result = fillReturnedMappings(analysis.mappings || []) as AnyRecord;
+    if (result.filledCount > 0) {
+      result.submit = runPostFillAction("workflow");
+    }
+    if (result.submit?.submitted) {
+      removeCurionPrompt();
+      return;
+    }
   }
 
   const promptSignature = JSON.stringify({
@@ -912,8 +1079,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
   if (message?.type === "CURION_FILL_MAPPINGS") {
     const result = fillReturnedMappings(message.mappings || []) as AnyRecord;
-    if (message.submitMode === "direct" && result.filledCount > 0) {
-      result.submit = submitBestForm();
+    if ((message.submitMode === "direct" || message.submitMode === "workflow") && result.filledCount > 0) {
+      result.submit = runPostFillAction(message.submitMode);
     }
     sendResponse(result);
     return true;
