@@ -35,7 +35,7 @@ const state: State = {
   profile: null,
   workingMetadata: {},
   activeMetadata: null,
-  metadataSource: "saved",
+  metadataSource: "working",
   userId: "",
   submitMode: "review",
   autoFillEnabled: false,
@@ -49,7 +49,7 @@ function hasMetadata(metadata: AnyRecord | null | undefined) {
 function resolveMetadataSource(stored: AnyRecord) {
   const source = String(stored?.curionMetadataSource || "");
   if (source === "saved" || source === "working") return source;
-  return "saved";
+  return "working";
 }
 
 function resolveSubmitMode(value: any) {

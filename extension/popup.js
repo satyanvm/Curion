@@ -21,7 +21,7 @@
         profile: null,
         workingMetadata: {},
         activeMetadata: null,
-        metadataSource: "saved",
+        metadataSource: "working",
         userId: "",
         submitMode: "review",
         autoFillEnabled: false,
@@ -34,7 +34,7 @@
         const source = String(stored?.curionMetadataSource || "");
         if (source === "saved" || source === "working")
             return source;
-        return "saved";
+        return "working";
     }
     function resolveSubmitMode(value) {
         const mode = String(value || "");
