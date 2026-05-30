@@ -28,8 +28,15 @@
     const saveWorkingJsonButton = document.getElementById("saveWorkingJsonButton");
     const useSavedProfileButton = document.getElementById("useSavedProfileButton");
     let metadataSource = "saved";
+    submitModeInput.value = "review";
+    function resolveSubmitMode(value) {
+        const mode = String(value || "");
+        return mode === "direct" || mode === "workflow" ? mode : "review";
+    }
     function fields() {
-        return Array.from(form.elements).filter((element) => element && typeof element.name === "string");
+        return Array.from(form.elements).filter((element) => {
+            return element && typeof element.name === "string" && element.name.trim();
+        });
     }
     function formToProfile() {
         return Object.fromEntries(fields().map((element) => [element.name, element.value.trim()]));
@@ -129,7 +136,7 @@
             curionUserId: userId,
             curionUseBackendProfile: true,
             curionAutoFillEnabled: autoFillInput.checked,
-            curionSubmitMode: submitModeInput.value,
+            curionSubmitMode: resolveSubmitMode(submitModeInput.value),
             curionMetadataSource: metadataSource
         });
         render(profile);
@@ -149,7 +156,10 @@
         await chrome.storage.local.remove("curionApiUrl");
         metadataSource = resolveMetadataSource(stored);
         autoFillInput.checked = Boolean(stored.curionAutoFillEnabled);
-        submitModeInput.value = stored.curionSubmitMode || "review";
+        submitModeInput.value = resolveSubmitMode(stored.curionSubmitMode);
+        if (stored.curionSubmitMode !== submitModeInput.value) {
+            await chrome.storage.local.set({ curionSubmitMode: submitModeInput.value });
+        }
         render(stored.curionProfile || SAMPLE_PROFILE);
         renderWorkingMetadata(stored.curionWorkingMetadata);
         renderMetadataSourceButtons();
@@ -157,7 +167,7 @@
     async function saveBehaviorSettings() {
         await chrome.storage.local.set({
             curionAutoFillEnabled: autoFillInput.checked,
-            curionSubmitMode: submitModeInput.value,
+            curionSubmitMode: resolveSubmitMode(submitModeInput.value),
             curionMetadataSource: metadataSource
         });
         setStatus("Behavior settings saved.");

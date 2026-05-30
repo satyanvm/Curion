@@ -271,6 +271,10 @@
             return source;
         return "saved";
     }
+    function resolveSubmitMode(value) {
+        const mode = String(value || "");
+        return mode === "direct" || mode === "workflow" ? mode : "review";
+    }
     function activeProfileFromSettings(settings) {
         const source = resolveMetadataSource(settings);
         if (source === "saved")
@@ -345,7 +349,7 @@
             };
         }
         const result = fillReturnedMappings(analysis.mappings || []);
-        const submitMode = settings?.curionSubmitMode || "review";
+        const submitMode = resolveSubmitMode(settings?.curionSubmitMode);
         if ((submitMode === "direct" || submitMode === "workflow") && result.filledCount > 0) {
             result.submit = runPostFillAction(submitMode);
         }
@@ -622,7 +626,7 @@
         return submitBestForm();
     }
     function isWorkflowMode(settings) {
-        return settings?.curionSubmitMode === "workflow";
+        return resolveSubmitMode(settings?.curionSubmitMode) === "workflow";
     }
     /** @type {number | null} */
     let autoFillTimer = null;
@@ -641,7 +645,7 @@
             profileKeys: Object.keys(profile || {}).filter((key) => String(profile[key] || "").trim()).sort(),
             profileUserId: savedBackendUserId(settings),
             metadataSource: resolveMetadataSource(settings),
-            submitMode: settings?.curionSubmitMode || "review"
+            submitMode: resolveSubmitMode(settings?.curionSubmitMode)
         });
     }
     function promptStyles() {
@@ -838,7 +842,7 @@
         primary.disabled = analysis.mappedCount === 0;
         primary.addEventListener("click", async () => {
             const stored = await readBackendSettings();
-            const submitMode = stored.curionSubmitMode || "review";
+            const submitMode = resolveSubmitMode(stored.curionSubmitMode);
             const result = analysis?.source
                 ? fillReturnedMappings(analysis.mappings || [])
                 : await fillWithBackendProfile(stored);
@@ -954,7 +958,7 @@
         }
         if (message?.type === "CURION_FILL") {
             readBackendSettings()
-                .then((settings) => fillWithBackendProfile({ ...settings, curionSubmitMode: message.submitMode || settings.curionSubmitMode || "review" }, message.profile || {}))
+                .then((settings) => fillWithBackendProfile({ ...settings, curionSubmitMode: resolveSubmitMode(message.submitMode || settings.curionSubmitMode) }, message.profile || {}))
                 .then(sendResponse)
                 .catch((error) => sendResponse({ error: error instanceof Error ? error.message : "Backend fill failed", filledCount: 0 }));
             return true;
@@ -964,9 +968,10 @@
             return true;
         }
         if (message?.type === "CURION_FILL_MAPPINGS") {
+            const submitMode = resolveSubmitMode(message.submitMode);
             const result = fillReturnedMappings(message.mappings || []);
-            if ((message.submitMode === "direct" || message.submitMode === "workflow") && result.filledCount > 0) {
-                result.submit = runPostFillAction(message.submitMode);
+            if ((submitMode === "direct" || submitMode === "workflow") && result.filledCount > 0) {
+                result.submit = runPostFillAction(submitMode);
             }
             sendResponse(result);
             return true;
