@@ -19,15 +19,17 @@
     const DEFAULT_API_URL = "https://backend-three-mu-84.vercel.app/api/agent/map-form";
     const form = document.getElementById("profileForm");
     const jsonEditor = document.getElementById("jsonEditor");
-    const workingJsonEditor = document.getElementById("workingJsonEditor");
     const autoFillInput = document.getElementById("autoFillInput");
     const submitModeInput = document.getElementById("submitModeInput");
     const statusElement = document.getElementById("status");
     const workingStats = document.getElementById("workingStats");
-    const importJsonInput = document.getElementById("importJsonInput");
     const saveWorkingJsonButton = document.getElementById("saveWorkingJsonButton");
     const useSavedProfileButton = document.getElementById("useSavedProfileButton");
-    let metadataSource = "saved";
+    const profileViewButton = document.getElementById("profileViewButton");
+    const backToJsonButton = document.getElementById("backToJsonButton");
+    const jsonView = document.getElementById("jsonView");
+    const profileView = document.getElementById("profileView");
+    let metadataSource = "working";
     submitModeInput.value = "review";
     function resolveSubmitMode(value) {
         const mode = String(value || "");
@@ -60,7 +62,7 @@
         const source = String(stored?.curionMetadataSource || "");
         if (source === "saved" || source === "working")
             return source;
-        return "saved";
+        return "working";
     }
     function setStatus(message) {
         statusElement.textContent = message;
@@ -72,23 +74,57 @@
     function isPlainObject(value) {
         return Boolean(value) && typeof value === "object" && !Array.isArray(value);
     }
+    function flashButton(button) {
+        button.classList.remove("is-clicked");
+        void button.offsetWidth;
+        button.classList.add("is-clicked");
+        window.setTimeout(() => button.classList.remove("is-clicked"), 180);
+    }
+    function parseJsonEditor() {
+        const parsed = JSON.parse(jsonEditor.value);
+        if (!isPlainObject(parsed)) {
+            throw new Error("JSON must be an object.");
+        }
+        return parsed;
+    }
     function renderMetadataSourceButtons() {
         const usingWorkingMetadata = metadataSource === "working";
-        saveWorkingJsonButton.classList.toggle("primary", usingWorkingMetadata);
-        useSavedProfileButton.classList.toggle("primary", !usingWorkingMetadata);
         saveWorkingJsonButton.setAttribute("aria-pressed", usingWorkingMetadata ? "true" : "false");
         useSavedProfileButton.setAttribute("aria-pressed", usingWorkingMetadata ? "false" : "true");
     }
-    function render(profile) {
+    function renderProfileForm(profile) {
         for (const element of fields()) {
             element.value = profile[element.name] || "";
         }
+    }
+    function render(profile) {
+        renderProfileForm(profile);
         jsonEditor.value = JSON.stringify(profile, null, 2);
     }
     function renderWorkingMetadata(metadata) {
         const active = metadata && typeof metadata === "object" && metadataEntries(metadata).length > 0;
-        workingJsonEditor.value = active ? JSON.stringify(metadata, null, 2) : "";
         updateWorkingStats(active ? metadata : {});
+    }
+    function showJsonView() {
+        jsonEditor.value = JSON.stringify(formToProfile(), null, 2);
+        jsonView.hidden = false;
+        profileView.hidden = true;
+        profileViewButton.hidden = false;
+        backToJsonButton.hidden = true;
+        jsonEditor.focus();
+    }
+    function showProfileView() {
+        try {
+            renderProfileForm(parseJsonEditor());
+        }
+        catch {
+            setStatus("JSON is invalid. Showing the current profile fields.");
+        }
+        jsonView.hidden = true;
+        profileView.hidden = false;
+        profileViewButton.hidden = true;
+        backToJsonButton.hidden = false;
+        form.querySelector("input, textarea, select")?.focus();
     }
     function ingestUrlFromMappingUrl(mappingUrl) {
         const trimmed = String(mappingUrl || "").trim();
@@ -172,23 +208,14 @@
         });
         setStatus("Behavior settings saved.");
     }
-    async function saveWorkingDraft(parsed, statusMessage) {
-        await chrome.storage.local.set({ curionWorkingMetadata: parsed });
-        renderWorkingMetadata(parsed);
-        renderMetadataSourceButtons();
-        setStatus(statusMessage);
-    }
     async function saveWorkingJson() {
-        if (!workingJsonEditor.value.trim()) {
+        if (!jsonEditor.value.trim()) {
             await clearWorkingJson();
             return;
         }
-        const parsed = JSON.parse(workingJsonEditor.value);
-        if (!isPlainObject(parsed)) {
-            throw new Error("Working metadata must be a JSON object.");
-        }
+        const parsed = parseJsonEditor();
         await applyWorkingJson(parsed, "Working metadata is now active.");
-        workingJsonEditor.focus();
+        jsonEditor.focus();
     }
     async function applyWorkingJson(parsed, statusMessage) {
         metadataSource = "working";
@@ -206,19 +233,8 @@
         setStatus("Working metadata cleared. Curion will use the saved profile.");
     }
     async function useSavedProfile() {
-        await saveProfile(formToProfile());
+        await saveProfile(parseJsonEditor());
         useSavedProfileButton.focus();
-    }
-    function exportProfile() {
-        const profile = formToProfile();
-        const blob = new Blob([JSON.stringify(profile, null, 2)], { type: "application/json" });
-        const url = URL.createObjectURL(blob);
-        const anchor = document.createElement("a");
-        anchor.href = url;
-        anchor.download = "curion-profile.json";
-        anchor.click();
-        URL.revokeObjectURL(url);
-        setStatus("Profile exported.");
     }
     form.addEventListener("submit", (event) => {
         event.preventDefault();
@@ -226,63 +242,21 @@
     });
     document.getElementById("saveJsonButton")?.addEventListener("click", () => {
         try {
-            const parsed = JSON.parse(jsonEditor.value);
+            const parsed = parseJsonEditor();
             saveProfile(parsed).catch((error) => setStatus(error.message));
         }
-        catch {
-            setStatus("JSON is invalid.");
+        catch (error) {
+            setStatus(error.message || "JSON is invalid.");
         }
     });
     document.getElementById("saveWorkingJsonButton")?.addEventListener("click", () => {
         saveWorkingJson().catch((error) => setStatus(error.message || "Working metadata JSON is invalid."));
     });
     document.getElementById("useSavedProfileButton")?.addEventListener("click", () => {
-        useSavedProfile().catch((error) => setStatus(error.message));
+        useSavedProfile().catch((error) => setStatus(error.message || "JSON is invalid."));
     });
-    document.getElementById("clearWorkingJsonButton")?.addEventListener("click", () => {
-        clearWorkingJson().catch((error) => setStatus(error.message));
-    });
-    workingJsonEditor.addEventListener("blur", () => {
-        const raw = workingJsonEditor.value.trim();
-        if (!raw)
-            return;
-        try {
-            const parsed = JSON.parse(raw);
-            if (!isPlainObject(parsed))
-                return;
-            const message = metadataSource === "working"
-                ? "Working JSON updated."
-                : "Working JSON saved. Click Use working JSON to activate it.";
-            saveWorkingDraft(parsed, message).catch((error) => setStatus(error.message));
-        }
-        catch {
-            // Leave invalid JSON for manual correction.
-        }
-    });
-    workingJsonEditor.addEventListener("paste", () => {
-        window.setTimeout(() => {
-            const raw = workingJsonEditor.value.trim();
-            if (!raw)
-                return;
-            try {
-                const parsed = JSON.parse(raw);
-                if (!isPlainObject(parsed))
-                    return;
-                const message = metadataSource === "working"
-                    ? "Working JSON updated."
-                    : "Working JSON pasted. Click Use working JSON to activate it.";
-                saveWorkingDraft(parsed, message).catch((error) => setStatus(error.message));
-            }
-            catch {
-                // Ignore invalid paste content until the user saves explicitly.
-            }
-        }, 0);
-    });
-    document.getElementById("loadSampleButton")?.addEventListener("click", () => {
-        render(SAMPLE_PROFILE);
-        setStatus("Sample loaded. Save when ready.");
-    });
-    document.getElementById("exportJsonButton")?.addEventListener("click", exportProfile);
+    profileViewButton.addEventListener("click", showProfileView);
+    backToJsonButton.addEventListener("click", showJsonView);
     autoFillInput.addEventListener("change", () => {
         saveBehaviorSettings().catch((error) => setStatus(error.message));
     });
@@ -292,18 +266,10 @@
     document.getElementById("copyJsonButton")?.addEventListener("click", () => {
         navigator.clipboard.writeText(jsonEditor.value).then(() => setStatus("JSON copied."), () => setStatus("Copy failed."));
     });
-    importJsonInput.addEventListener("change", async () => {
-        const file = importJsonInput.files?.[0];
-        importJsonInput.value = "";
-        if (!file)
-            return;
-        try {
-            const parsed = JSON.parse(await file.text());
-            await saveProfile(parsed);
-        }
-        catch {
-            setStatus("Import failed. Use a valid JSON file.");
-        }
+    document.addEventListener("click", (event) => {
+        const button = event.target?.closest?.("button");
+        if (button)
+            flashButton(button);
     });
     for (const element of fields()) {
         element.addEventListener("input", () => {
