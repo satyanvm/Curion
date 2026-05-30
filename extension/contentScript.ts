@@ -329,6 +329,11 @@ function resolveMetadataSource(settings) {
   return "saved";
 }
 
+function resolveSubmitMode(value) {
+  const mode = String(value || "");
+  return mode === "direct" || mode === "workflow" ? mode : "review";
+}
+
 function activeProfileFromSettings(settings) {
   const source = resolveMetadataSource(settings);
   if (source === "saved") return settings.curionProfile || {};
@@ -407,7 +412,7 @@ async function fillWithBackendProfile(settings, profileOverride = null) {
   }
 
   const result = fillReturnedMappings(analysis.mappings || []) as AnyRecord;
-  const submitMode = settings?.curionSubmitMode || "review";
+  const submitMode = resolveSubmitMode(settings?.curionSubmitMode);
 
   if ((submitMode === "direct" || submitMode === "workflow") && result.filledCount > 0) {
     result.submit = runPostFillAction(submitMode);
@@ -702,7 +707,7 @@ function runPostFillAction(submitMode) {
 }
 
 function isWorkflowMode(settings) {
-  return settings?.curionSubmitMode === "workflow";
+  return resolveSubmitMode(settings?.curionSubmitMode) === "workflow";
 }
 
 /** @type {number | null} */
@@ -723,7 +728,7 @@ function buildAutoFillSignature(profile, settings) {
     profileKeys: Object.keys(profile || {}).filter((key) => String(profile[key] || "").trim()).sort(),
     profileUserId: savedBackendUserId(settings),
     metadataSource: resolveMetadataSource(settings),
-    submitMode: settings?.curionSubmitMode || "review"
+    submitMode: resolveSubmitMode(settings?.curionSubmitMode)
   });
 }
 
@@ -930,7 +935,7 @@ function renderCurionPrompt(analysis, message) {
 
   primary.addEventListener("click", async () => {
     const stored = await readBackendSettings();
-    const submitMode = stored.curionSubmitMode || "review";
+    const submitMode = resolveSubmitMode(stored.curionSubmitMode);
     const result = analysis?.source
       ? fillReturnedMappings(analysis.mappings || [])
       : await fillWithBackendProfile(stored);
@@ -1064,7 +1069,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message?.type === "CURION_FILL") {
     readBackendSettings()
       .then((settings) => fillWithBackendProfile(
-        { ...settings, curionSubmitMode: message.submitMode || settings.curionSubmitMode || "review" },
+        { ...settings, curionSubmitMode: resolveSubmitMode(message.submitMode || settings.curionSubmitMode) },
         message.profile || {}
       ))
       .then(sendResponse)
@@ -1078,9 +1083,10 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   }
 
   if (message?.type === "CURION_FILL_MAPPINGS") {
+    const submitMode = resolveSubmitMode(message.submitMode);
     const result = fillReturnedMappings(message.mappings || []) as AnyRecord;
-    if ((message.submitMode === "direct" || message.submitMode === "workflow") && result.filledCount > 0) {
-      result.submit = runPostFillAction(message.submitMode);
+    if ((submitMode === "direct" || submitMode === "workflow") && result.filledCount > 0) {
+      result.submit = runPostFillAction(submitMode);
     }
     sendResponse(result);
     return true;

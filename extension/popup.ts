@@ -52,6 +52,11 @@ function resolveMetadataSource(stored: AnyRecord) {
   return "saved";
 }
 
+function resolveSubmitMode(value: any) {
+  const mode = String(value || "");
+  return mode === "direct" || mode === "workflow" ? mode : "review";
+}
+
 function activeMetadataFromState(profile: AnyRecord | null, workingMetadata: AnyRecord, source: string) {
   if (source === "saved") return profile || {};
   return hasMetadata(workingMetadata) ? workingMetadata : (profile || {});
@@ -111,7 +116,10 @@ async function loadProfile() {
   state.metadataSource = resolveMetadataSource(stored);
   state.activeMetadata = activeMetadataFromState(state.profile, state.workingMetadata, state.metadataSource);
   state.userId = stored.curionUseBackendProfile === false ? "" : String(stored.curionUserId || "").trim();
-  state.submitMode = stored.curionSubmitMode || "review";
+  state.submitMode = resolveSubmitMode(stored.curionSubmitMode);
+  if (stored.curionSubmitMode !== state.submitMode) {
+    await chrome.storage.local.set({ curionSubmitMode: state.submitMode });
+  }
   state.autoFillEnabled = Boolean(stored.curionAutoFillEnabled);
   return state.activeMetadata;
 }

@@ -31,8 +31,17 @@ const saveWorkingJsonButton = document.getElementById("saveWorkingJsonButton") a
 const useSavedProfileButton = document.getElementById("useSavedProfileButton") as any;
 let metadataSource = "saved";
 
+submitModeInput.value = "review";
+
+function resolveSubmitMode(value: any) {
+  const mode = String(value || "");
+  return mode === "direct" || mode === "workflow" ? mode : "review";
+}
+
 function fields() {
-  return Array.from(form.elements).filter((element: any) => element && typeof element.name === "string") as any[];
+  return Array.from(form.elements).filter((element: any) => {
+    return element && typeof element.name === "string" && element.name.trim();
+  }) as any[];
 }
 
 function formToProfile() {
@@ -145,7 +154,7 @@ async function saveProfile(profile: any) {
     curionUserId: userId,
     curionUseBackendProfile: true,
     curionAutoFillEnabled: autoFillInput.checked,
-    curionSubmitMode: submitModeInput.value,
+    curionSubmitMode: resolveSubmitMode(submitModeInput.value),
     curionMetadataSource: metadataSource
   });
   render(profile);
@@ -166,7 +175,10 @@ async function loadProfile() {
   await chrome.storage.local.remove("curionApiUrl");
   metadataSource = resolveMetadataSource(stored);
   autoFillInput.checked = Boolean(stored.curionAutoFillEnabled);
-  submitModeInput.value = stored.curionSubmitMode || "review";
+  submitModeInput.value = resolveSubmitMode(stored.curionSubmitMode);
+  if (stored.curionSubmitMode !== submitModeInput.value) {
+    await chrome.storage.local.set({ curionSubmitMode: submitModeInput.value });
+  }
   render(stored.curionProfile || SAMPLE_PROFILE);
   renderWorkingMetadata(stored.curionWorkingMetadata);
   renderMetadataSourceButtons();
@@ -175,7 +187,7 @@ async function loadProfile() {
 async function saveBehaviorSettings() {
   await chrome.storage.local.set({
     curionAutoFillEnabled: autoFillInput.checked,
-    curionSubmitMode: submitModeInput.value,
+    curionSubmitMode: resolveSubmitMode(submitModeInput.value),
     curionMetadataSource: metadataSource
   });
   setStatus("Behavior settings saved.");
