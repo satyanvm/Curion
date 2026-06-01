@@ -23,6 +23,7 @@
         activeMetadata: null,
         metadataSource: "working",
         userId: "",
+        openAiApiKey: "",
         submitMode: "review",
         autoFillEnabled: false,
         analysis: null
@@ -79,6 +80,16 @@
         const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
         return tab;
     }
+    async function captureVisibleScreenshot() {
+        if (!state.openAiApiKey || !chrome.tabs.captureVisibleTab)
+            return "";
+        try {
+            return await chrome.tabs.captureVisibleTab(undefined, { format: "png" });
+        }
+        catch {
+            return "";
+        }
+    }
     async function loadProfile() {
         const stored = await chrome.storage.local.get([
             "curionProfile",
@@ -87,7 +98,8 @@
             "curionUserId",
             "curionUseBackendProfile",
             "curionAutoFillEnabled",
-            "curionSubmitMode"
+            "curionSubmitMode",
+            "curionOpenAiApiKey"
         ]);
         await chrome.storage.local.remove("curionApiUrl");
         state.profile = stored.curionProfile || null;
@@ -97,6 +109,7 @@
         state.metadataSource = resolveMetadataSource(stored);
         state.activeMetadata = activeMetadataFromState(state.profile, state.workingMetadata, state.metadataSource);
         state.userId = stored.curionUseBackendProfile === false ? "" : String(stored.curionUserId || "").trim();
+        state.openAiApiKey = String(stored.curionOpenAiApiKey || "").trim();
         state.submitMode = resolveSubmitMode(stored.curionSubmitMode);
         if (stored.curionSubmitMode !== state.submitMode) {
             await chrome.storage.local.set({ curionSubmitMode: state.submitMode });
@@ -230,6 +243,14 @@
         }
         else {
             mappingPayload.profile = state.activeMetadata;
+        }
+        if (state.openAiApiKey) {
+            mappingPayload.llmProvider = "openai";
+            mappingPayload.llmApiKey = state.openAiApiKey;
+            const screenshotDataUrl = await captureVisibleScreenshot();
+            if (screenshotDataUrl) {
+                mappingPayload.screenshotDataUrl = screenshotDataUrl;
+            }
         }
         const response = await fetch(DEFAULT_API_URL, {
             method: "POST",

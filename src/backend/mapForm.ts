@@ -1,5 +1,6 @@
 import { FieldValueMap, FormField, UserProfile } from "../types/types";
 import { ExtractionConfidenceReport, MappingConfidenceReport } from "../types/types";
+import { mapFieldsDirectlyWithLlm } from "../llm/directMapFields";
 
 export type BackendFormMapping = {
   field: FormField;
@@ -39,6 +40,8 @@ export type BackendMapFormInput = {
   title?: string;
   html?: string;
   userId?: string;
+  llmApiKey?: string;
+  screenshotDataUrl?: string;
 };
 
 export type BackendMapFormResult = {
@@ -52,8 +55,25 @@ function backendApiUrl(): string {
   return process.env.CURION_BACKEND_API_URL || DEFAULT_BACKEND_URL;
 }
 
+function configuredLlmApiKey(input: BackendMapFormInput): string | undefined {
+  return (
+    input.llmApiKey ||
+    process.env.OPENAI_API_KEY ||
+    process.env.CURION_LLM_API_KEY ||
+    process.env.openai_api_key ||
+    process.env.curion_llm_api_key
+  );
+}
+
 export async function mapFieldsWithBackend(input: BackendMapFormInput): Promise<BackendMapFormResult> {
   const endpoint = backendApiUrl();
+  if (endpoint === "local" || endpoint === "local-openai") {
+    return mapFieldsDirectlyWithLlm({
+      ...input,
+      llmApiKey: configuredLlmApiKey(input),
+    });
+  }
+
   const response = await globalThis.fetch(endpoint, {
     method: "POST",
     headers: {
@@ -67,6 +87,9 @@ export async function mapFieldsWithBackend(input: BackendMapFormInput): Promise<
       title: input.title,
       html: input.html,
       userId: input.userId,
+      llmProvider: configuredLlmApiKey(input) ? "openai" : undefined,
+      llmApiKey: configuredLlmApiKey(input),
+      screenshotDataUrl: input.screenshotDataUrl,
     }),
   });
 

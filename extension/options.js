@@ -21,6 +21,7 @@
     const jsonEditor = document.getElementById("jsonEditor");
     const autoFillInput = document.getElementById("autoFillInput");
     const submitModeInput = document.getElementById("submitModeInput");
+    const openAiApiKeyInput = document.getElementById("openAiApiKeyInput");
     const statusElement = document.getElementById("status");
     const workingStats = document.getElementById("workingStats");
     const saveWorkingJsonButton = document.getElementById("saveWorkingJsonButton");
@@ -173,6 +174,7 @@
             curionUseBackendProfile: true,
             curionAutoFillEnabled: autoFillInput.checked,
             curionSubmitMode: resolveSubmitMode(submitModeInput.value),
+            curionOpenAiApiKey: String(openAiApiKeyInput.value || "").trim(),
             curionMetadataSource: metadataSource
         });
         render(profile);
@@ -187,12 +189,14 @@
             "curionUserId",
             "curionUseBackendProfile",
             "curionAutoFillEnabled",
-            "curionSubmitMode"
+            "curionSubmitMode",
+            "curionOpenAiApiKey"
         ]);
         await chrome.storage.local.remove("curionApiUrl");
         metadataSource = resolveMetadataSource(stored);
         autoFillInput.checked = Boolean(stored.curionAutoFillEnabled);
         submitModeInput.value = resolveSubmitMode(stored.curionSubmitMode);
+        openAiApiKeyInput.value = stored.curionOpenAiApiKey || "";
         if (stored.curionSubmitMode !== submitModeInput.value) {
             await chrome.storage.local.set({ curionSubmitMode: submitModeInput.value });
         }
@@ -204,6 +208,7 @@
         await chrome.storage.local.set({
             curionAutoFillEnabled: autoFillInput.checked,
             curionSubmitMode: resolveSubmitMode(submitModeInput.value),
+            curionOpenAiApiKey: String(openAiApiKeyInput.value || "").trim(),
             curionMetadataSource: metadataSource
         });
         setStatus("Behavior settings saved.");
@@ -261,6 +266,9 @@
         saveBehaviorSettings().catch((error) => setStatus(error.message));
     });
     submitModeInput.addEventListener("change", () => {
+        saveBehaviorSettings().catch((error) => setStatus(error.message));
+    });
+    openAiApiKeyInput.addEventListener("change", () => {
         saveBehaviorSettings().catch((error) => setStatus(error.message));
     });
     document.getElementById("copyJsonButton")?.addEventListener("click", () => {

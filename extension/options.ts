@@ -23,6 +23,7 @@ const form = document.getElementById("profileForm") as any;
 const jsonEditor = document.getElementById("jsonEditor") as any;
 const autoFillInput = document.getElementById("autoFillInput") as any;
 const submitModeInput = document.getElementById("submitModeInput") as any;
+const openAiApiKeyInput = document.getElementById("openAiApiKeyInput") as any;
 const statusElement = document.getElementById("status") as any;
 const workingStats = document.getElementById("workingStats") as any;
 const saveWorkingJsonButton = document.getElementById("saveWorkingJsonButton") as any;
@@ -195,6 +196,7 @@ async function saveProfile(profile: any) {
     curionUseBackendProfile: true,
     curionAutoFillEnabled: autoFillInput.checked,
     curionSubmitMode: resolveSubmitMode(submitModeInput.value),
+    curionOpenAiApiKey: String(openAiApiKeyInput.value || "").trim(),
     curionMetadataSource: metadataSource
   });
   render(profile);
@@ -210,12 +212,14 @@ async function loadProfile() {
     "curionUserId",
     "curionUseBackendProfile",
     "curionAutoFillEnabled",
-    "curionSubmitMode"
+    "curionSubmitMode",
+    "curionOpenAiApiKey"
   ]);
   await chrome.storage.local.remove("curionApiUrl");
   metadataSource = resolveMetadataSource(stored);
   autoFillInput.checked = Boolean(stored.curionAutoFillEnabled);
   submitModeInput.value = resolveSubmitMode(stored.curionSubmitMode);
+  openAiApiKeyInput.value = stored.curionOpenAiApiKey || "";
   if (stored.curionSubmitMode !== submitModeInput.value) {
     await chrome.storage.local.set({ curionSubmitMode: submitModeInput.value });
   }
@@ -228,6 +232,7 @@ async function saveBehaviorSettings() {
   await chrome.storage.local.set({
     curionAutoFillEnabled: autoFillInput.checked,
     curionSubmitMode: resolveSubmitMode(submitModeInput.value),
+    curionOpenAiApiKey: String(openAiApiKeyInput.value || "").trim(),
     curionMetadataSource: metadataSource
   });
   setStatus("Behavior settings saved.");
@@ -297,6 +302,10 @@ autoFillInput.addEventListener("change", () => {
 });
 
 submitModeInput.addEventListener("change", () => {
+  saveBehaviorSettings().catch((error: any) => setStatus(error.message));
+});
+
+openAiApiKeyInput.addEventListener("change", () => {
   saveBehaviorSettings().catch((error: any) => setStatus(error.message));
 });
 

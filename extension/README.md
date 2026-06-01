@@ -82,7 +82,7 @@ Default endpoint:
 https://backend-three-mu-84.vercel.app/api/agent/map-form
 ```
 
-The popup sends `userId`, `fields`, `html`, `goal`, and page context when **Saved profile** is active, which makes the backend query stored Supabase vector atoms. If **Working JSON** is active, it sends the transient `profile` payload instead. The backend repairs low-confidence extraction when needed, then runs semantic matching first and Gemini mapping fallback only for low-confidence/unmapped mappings. See `backend/README.md`.
+The popup sends `userId`, `fields`, `html`, `goal`, and page context when **Saved profile** is active, which makes the backend query stored Supabase vector atoms. If **Working JSON** is active, it sends the transient `profile` payload instead. Users can also save an OpenAI fallback key in Options; the popup includes it only in mapping requests so the backend can run LLM extraction repair, vision repair when a screenshot is supplied, and low-confidence mapping fallback. See `backend/README.md`.
 
 ## Files
 
