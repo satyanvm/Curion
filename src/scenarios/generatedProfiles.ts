@@ -1,17 +1,17 @@
 import { UserProfile } from "../types/types";
 
-export const baseProfile: UserProfile = {
-  name: "Isha Rao",
-  email: "isha.rao@example.com",
-  phone: "+91 9000011111",
-  company: "Northstar Systems",
-  jobTitle: "Operations Lead",
-  address: "81 Lake View Road",
+export const baseProfile: any = {
+  fullName: "Isha Rao",
+  gmail: "isha.rao@example.com",
+  mobile: "+91 9000011111",
+  organization: "Northstar Systems",
+  Title: "Operations Lead",
+  place: "81 Lake View Road",
   city: "Hyderabad",
   state: "Telangana",
-  postalCode: "500081",
+  zip: "500081",
   country: "India",
-  linkedin: "https://www.linkedin.com/in/isharao",
+  socialprofile: "https://www.linkedin.com/in/isharao",
   website: "https://northstar.example",
   preferredContactMethod: "Email",
   notes: "Testing generated form scenarios for Curion.",

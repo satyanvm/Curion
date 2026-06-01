@@ -30,6 +30,12 @@ type OpenAiResponsesResponse = {
 
 type OpenAiChoice = NonNullable<OpenAiChatResponse["choices"]>[number];
 
+type OpenAiEmbeddingResponse = {
+  data?: Array<{
+    embedding?: number[];
+  }>;
+};
+
 function getOpenAiApiKey(explicitApiKey?: string): string | undefined {
   return (
     explicitApiKey ||
@@ -88,6 +94,23 @@ function endpointFor(path: "chat/completions" | "responses"): string {
   if (path === "responses" && /\/responses$/i.test(baseUrl)) return baseUrl;
   if (/\/v1$/i.test(baseUrl)) return `${baseUrl}/${path}`;
   return `${baseUrl}/v1/${path}`;
+}
+
+function embeddingsEndpoint(): string {
+  const baseUrl = getOpenAiBaseUrl();
+  if (/\/embeddings$/i.test(baseUrl)) return baseUrl;
+  if (/\/v1$/i.test(baseUrl)) return `${baseUrl}/embeddings`;
+  return `${baseUrl}/v1/embeddings`;
+}
+
+function getEmbeddingModel(): string {
+  return (
+    process.env.OPENAI_EMBEDDING_MODEL ||
+    process.env.openai_embedding_model ||
+    process.env.EMBEDDING_MODEL ||
+    process.env.embedding_model ||
+    "text-embedding-3-small"
+  );
 }
 
 export function isOpenAiConfigured(explicitApiKey?: string): boolean {
@@ -222,25 +245,12 @@ function chatCompletionsRequestBody(
   });
 }
 
-export async function generateJsonWithOpenAI(
-  systemInstruction: string,
-  payload: unknown,
-  options: { apiKey?: string; imageDataUrl?: string } = {}
-): Promise<string> {
-  const apiKey = getOpenAiApiKey(options.apiKey);
-  if (!apiKey || typeof fetch !== "function") {
-    throw new Error("OpenAI API key is not configured");
-  }
-
-  const isVisionRequest = Boolean(options.imageDataUrl);
-  const model = getOpenAiModel(isVisionRequest);
-  const wireApi = getOpenAiWireApi();
-  const endpoint = endpointFor(wireApi === "responses" ? "responses" : "chat/completions");
-  const requestBody =
-    wireApi === "responses"
-      ? responsesRequestBody(model, systemInstruction, payload, options.imageDataUrl)
-      : chatCompletionsRequestBody(model, systemInstruction, payload, options.imageDataUrl);
-
+async function postJsonWithRetries(
+  endpoint: string,
+  apiKey: string,
+  requestBody: string,
+  context: Array<string>
+): Promise<Response> {
   let response: Response | undefined;
   const maxAttempts = Number(process.env.OPENAI_MAX_ATTEMPTS || process.env.openai_max_attempts || 3);
   for (let attempt = 0; attempt < Math.max(1, maxAttempts); attempt += 1) {
@@ -266,15 +276,41 @@ export async function generateJsonWithOpenAI(
     throw new Error(
       [
         `OpenAI request failed with status ${status}`,
-        `endpoint=${endpoint}`,
-        `model=${model}`,
-        `wire_api=${wireApi}`,
+        ...context,
         detail ? `detail=${redactSensitiveText(detail)}` : "",
       ]
         .filter(Boolean)
         .join(" ")
     );
   }
+
+  return response;
+}
+
+export async function generateJsonWithOpenAI(
+  systemInstruction: string,
+  payload: unknown,
+  options: { apiKey?: string; imageDataUrl?: string } = {}
+): Promise<string> {
+  const apiKey = getOpenAiApiKey(options.apiKey);
+  if (!apiKey || typeof fetch !== "function") {
+    throw new Error("OpenAI API key is not configured");
+  }
+
+  const isVisionRequest = Boolean(options.imageDataUrl);
+  const model = getOpenAiModel(isVisionRequest);
+  const wireApi = getOpenAiWireApi();
+  const endpoint = endpointFor(wireApi === "responses" ? "responses" : "chat/completions");
+  const requestBody =
+    wireApi === "responses"
+      ? responsesRequestBody(model, systemInstruction, payload, options.imageDataUrl)
+      : chatCompletionsRequestBody(model, systemInstruction, payload, options.imageDataUrl);
+
+  const response = await postJsonWithRetries(endpoint, apiKey, requestBody, [
+    `endpoint=${endpoint}`,
+    `model=${model}`,
+    `wire_api=${wireApi}`,
+  ]);
 
   const json = (await response.json()) as OpenAiChatResponse | OpenAiResponsesResponse;
   const content =
@@ -287,4 +323,35 @@ export async function generateJsonWithOpenAI(
   }
 
   return content;
+}
+
+export async function generateTextEmbeddingsWithOpenAI(
+  texts: string[],
+  options: { apiKey?: string } = {}
+): Promise<number[][]> {
+  const apiKey = getOpenAiApiKey(options.apiKey);
+  if (!apiKey || typeof fetch !== "function") {
+    throw new Error("OpenAI API key is not configured");
+  }
+  if (texts.length === 0) return [];
+
+  const model = getEmbeddingModel();
+  const endpoint = embeddingsEndpoint();
+  const response = await postJsonWithRetries(
+    endpoint,
+    apiKey,
+    JSON.stringify({
+      model,
+      input: texts,
+    }),
+    [`endpoint=${endpoint}`, `model=${model}`, "wire_api=embeddings"]
+  );
+
+  const json = (await response.json()) as OpenAiEmbeddingResponse;
+  const embeddings = json.data?.map((item) => item.embedding || []) || [];
+  if (embeddings.length !== texts.length || embeddings.some((embedding) => embedding.length === 0)) {
+    throw new Error(`OpenAI embeddings response returned ${embeddings.length} embeddings for ${texts.length} inputs`);
+  }
+
+  return embeddings;
 }

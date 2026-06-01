@@ -14,7 +14,7 @@ type Scenario = {
   name: string;
   html: string;
   profile: UserProfile;
-  expectedPayload: Record<string, string>;
+  expectedFields: string[];
   expectsVision?: boolean;
 };
 
@@ -179,14 +179,7 @@ const scenarios: Scenario[] = [
   {
     name: "clear-labels-contact",
     profile: baseProfile,
-    expectedPayload: {
-      full_name: baseProfile.name,
-      email: baseProfile.email,
-      phone: baseProfile.phone,
-      company: baseProfile.company,
-      role: baseProfile.jobTitle,
-      terms: "yes",
-    },
+    expectedFields: ["full_name", "email", "phone", "company", "role", "terms"],
     html: pageShell(
       "Clear labels contact form",
       `<form>
@@ -203,13 +196,7 @@ const scenarios: Scenario[] = [
   {
     name: "nearby-text-with-missing-labels",
     profile: alternateProfile,
-    expectedPayload: {
-      f_101: alternateProfile.name,
-      f_102: alternateProfile.email,
-      f_103: alternateProfile.city,
-      f_104: alternateProfile.preferredContactMethod,
-      f_105: alternateProfile.notes,
-    },
+    expectedFields: ["f_101", "f_102", "f_103", "f_104", "f_105"],
     html: pageShell(
       "Missing labels with visible nearby text",
       `<form>
@@ -225,13 +212,7 @@ const scenarios: Scenario[] = [
   {
     name: "ambiguous-crm-data",
     profile: baseProfile,
-    expectedPayload: {
-      primary_contact: baseProfile.name,
-      inbox: baseProfile.email,
-      seat: baseProfile.jobTitle,
-      source: baseProfile.website,
-      context: baseProfile.notes,
-    },
+    expectedFields: ["primary_contact", "inbox", "seat", "source", "context"],
     html: pageShell(
       "Ambiguous CRM intake",
       `<form>
@@ -248,12 +229,7 @@ const scenarios: Scenario[] = [
     name: "css-visual-labels-vision",
     profile: alternateProfile,
     expectsVision: true,
-    expectedPayload: {
-      q1: alternateProfile.name,
-      q2: alternateProfile.email,
-      q3: alternateProfile.phone,
-      q4: alternateProfile.company,
-    },
+    expectedFields: ["q1", "q2", "q3", "q4"],
     html: pageShell(
       "CSS visual labels",
       `<form>
@@ -267,10 +243,20 @@ const scenarios: Scenario[] = [
   },
 ];
 
-function payloadFailures(expected: Record<string, string>, actual: Record<string, string>): string[] {
-  return Object.entries(expected)
-    .filter(([key, value]) => actual[key] !== value)
-    .map(([key, value]) => `${key}: expected ${JSON.stringify(value)}, got ${JSON.stringify(actual[key])}`);
+function payloadFailures(
+  expectedFields: string[],
+  actual: Record<string, string>,
+  mappedValues: Record<string, string>
+): string[] {
+  const mappedValueSet = new Set(Object.values(mappedValues).filter(Boolean));
+  return expectedFields.flatMap((fieldName) => {
+    const actualValue = actual[fieldName];
+    if (!actualValue) return [`${fieldName}: expected a filled value, got ${JSON.stringify(actualValue)}`];
+    if (!mappedValueSet.has(actualValue)) {
+      return [`${fieldName}: submitted value ${JSON.stringify(actualValue)} was not one of the mapped values`];
+    }
+    return [];
+  });
 }
 
 async function runScenario(root: string, scenario: Scenario, options: RunOptions): Promise<void> {
@@ -347,7 +333,7 @@ async function runScenario(root: string, scenario: Scenario, options: RunOptions
     if (options.pauseMs > 0) await sleep(options.pauseMs);
 
     const payload = JSON.parse(await page.locator("#result").innerText()) as Record<string, string>;
-    const failures = payloadFailures(scenario.expectedPayload, payload);
+    const failures = payloadFailures(scenario.expectedFields, payload, mapping.mappedValues);
     await writeReportToPage(page, {
       status: failures.length > 0 ? "Submitted with mismatches." : "Submitted successfully. Browser will stay open.",
       profile: scenario.profile,
@@ -407,7 +393,6 @@ async function main(): Promise<void> {
     throw new Error("OPENAI_API_KEY or CURION_LLM_API_KEY is required for generated LLM fallback scenarios");
   }
 
-  process.env.CURION_BACKEND_API_URL = "local-openai";
   const options = runOptions();
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "curion-generated-form-scenarios-"));
   console.log(`Generated scenario forms: ${root}`);

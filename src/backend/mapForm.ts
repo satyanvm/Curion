@@ -1,6 +1,5 @@
 import { FieldValueMap, FormField, UserProfile } from "../types/types";
 import { ExtractionConfidenceReport, MappingConfidenceReport } from "../types/types";
-import { mapFieldsDirectlyWithLlm } from "../llm/directMapFields";
 
 export type BackendFormMapping = {
   field: FormField;
@@ -67,13 +66,6 @@ function configuredLlmApiKey(input: BackendMapFormInput): string | undefined {
 
 export async function mapFieldsWithBackend(input: BackendMapFormInput): Promise<BackendMapFormResult> {
   const endpoint = backendApiUrl();
-  if (endpoint === "local" || endpoint === "local-openai") {
-    return mapFieldsDirectlyWithLlm({
-      ...input,
-      llmApiKey: configuredLlmApiKey(input),
-    });
-  }
-
   const response = await globalThis.fetch(endpoint, {
     method: "POST",
     headers: {
@@ -94,7 +86,10 @@ export async function mapFieldsWithBackend(input: BackendMapFormInput): Promise<
   });
 
   if (!response.ok) {
-    throw new Error(`Backend mapping failed with status ${response.status}`);
+    const detail = await response.text().catch(() => "");
+    throw new Error(
+      `Backend mapping failed with status ${response.status}${detail ? `: ${detail}` : ""}`
+    );
   }
 
   const analysis = (await response.json()) as BackendMapFormResponse;
