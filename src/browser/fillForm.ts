@@ -50,6 +50,45 @@ async function ensureValuePersisted(
   }, expectedValue);
 }
 
+function normalizeChoice(value: string | null | undefined): string {
+  return String(value || "")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+async function checkRadioValue(page: Page, field: FormField, value: string): Promise<void> {
+  const normalizedValue = normalizeChoice(value);
+  const baseLocator = field.name
+    ? page.locator(`input[type="radio"][name="${field.name.replace(/"/g, '\\"')}"]`)
+    : page.locator(field.selector);
+  const count = await baseLocator.count();
+
+  for (let index = 0; index < count; index += 1) {
+    const radio = baseLocator.nth(index);
+    const metadata = await radio.evaluate((element) => {
+      const input = element as HTMLInputElement;
+      return {
+        value: input.value,
+        label: input.labels?.[0]?.textContent?.trim() || "",
+        ariaLabel: input.getAttribute("aria-label") || "",
+      };
+    });
+    const choices = [metadata.value, metadata.label, metadata.ariaLabel].map(normalizeChoice);
+    if (choices.includes(normalizedValue)) {
+      await radio.check();
+      return;
+    }
+  }
+
+  const shouldCheck = /^(true|yes|1|on|agree|accepted)$/i.test(value);
+  if (shouldCheck) {
+    await baseLocator.first().check();
+  }
+}
+
 export async function fillForm(
   page: Page,
   fields: FormField[],
@@ -67,7 +106,9 @@ export async function fillForm(
       await locator.selectOption({ label: value }).catch(async () => {
         await locator.selectOption({ value });
       });
-    } else if (field.type === "checkbox" || field.type === "radio") {
+    } else if (field.type === "radio") {
+      await checkRadioValue(page, field, value);
+    } else if (field.type === "checkbox") {
       const shouldCheck = /^(true|yes|1|on)$/i.test(value);
       if (shouldCheck) {
         await locator.check();

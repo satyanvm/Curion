@@ -22,6 +22,10 @@ declare const chrome: {
   };
   tabs: {
     query(queryInfo: Record<string, any>): Promise<Array<{ id?: number }>>;
+    captureVisibleTab?(
+      windowId?: number,
+      options?: { format?: "jpeg" | "png"; quality?: number }
+    ): Promise<string>;
     sendMessage(tabId: number, message: any): Promise<any>;
   };
 };

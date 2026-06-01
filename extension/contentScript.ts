@@ -82,6 +82,7 @@ type PageSnapshot = {
  *   curionWorkingMetadata?: Dict;
  *   curionProfile?: Dict;
  *   curionUserId?: string;
+ *   curionOpenAiApiKey?: string;
  *   curionUseBackendProfile?: boolean;
  *   curionSubmitMode?: string;
  *   curionAutoFillEnabled?: boolean;
@@ -366,7 +367,12 @@ async function analyzeWithStoredBackendProfile(settings, profileOverride = null)
   const activeProfile = profileOverride && hasProfile(profileOverride)
     ? profileOverride
     : activeProfileFromSettings(settings);
-  const requestBody: PageSnapshot & { profile?: Dict; userId?: string } = {
+  const requestBody: PageSnapshot & {
+    profile?: Dict;
+    userId?: string;
+    llmProvider?: string;
+    llmApiKey?: string;
+  } = {
     goal: "Fill this page with the active Curion metadata.",
     ...pageSnapshot
   };
@@ -377,6 +383,10 @@ async function analyzeWithStoredBackendProfile(settings, profileOverride = null)
     requestBody.profile = activeProfile;
   } else {
     return null;
+  }
+  if (settings?.curionOpenAiApiKey) {
+    requestBody.llmProvider = "openai";
+    requestBody.llmApiKey = String(settings.curionOpenAiApiKey || "").trim();
   }
 
   const response = await fetch(DEFAULT_API_URL, {
@@ -506,6 +516,7 @@ async function readBackendSettings() {
     "curionWorkingMetadata",
     "curionMetadataSource",
     "curionUserId",
+    "curionOpenAiApiKey",
     "curionUseBackendProfile",
     "curionSubmitMode"
   ]);

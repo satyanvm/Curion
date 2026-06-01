@@ -66,10 +66,10 @@ Response body:
 The mapping endpoint is the single mapping pipeline used by the extension and CLI test runner:
 
 1. DOM-extracted fields are embedded as retrieval queries.
-2. If extraction confidence falls below `0.68`, Gemini repairs the field extraction from the submitted HTML, the backend merges repaired fields, and extraction confidence is recalculated. If confidence is still below `0.68` after that one repair attempt, the response sets `reviewRequired: true` and continues mapping.
+2. If extraction confidence falls below `0.68`, the configured LLM repairs the field extraction from submitted HTML. If `screenshotDataUrl` and an OpenAI key are provided, the repair can also use vision to recover labels that are visible but not exposed in the DOM. The backend merges repaired fields and recalculates confidence.
 3. Profile atoms are matched semantically from Supabase when `userId` is supplied, or from the transient `profile` payload for local demos.
-4. Low-confidence or unmapped mappings are sent to Gemini as an LLM fallback and resolved back to stored profile atoms.
-5. Vision fallback is intentionally not implemented yet.
+4. Low-confidence or unmapped mappings are sent to the configured LLM fallback and resolved back to stored profile atoms.
+5. If Gemini embeddings are unavailable but an LLM fallback key and transient `profile` payload are supplied, the endpoint can continue with an LLM-only mapping path.
 
 ## Environment Variables
 
@@ -77,6 +77,10 @@ Set these in Vercel:
 
 - `GEMINI_API_KEY`
 - `GEMINI_EMBEDDING_MODEL` optional, defaults to `gemini-embedding-2`
+- `OPENAI_API_KEY` optional fallback key for JSON/vision LLM repair
+- `BASE_URL` optional OpenAI-compatible API base URL; accepts either provider root, `/v1`, or `/v1/chat/completions`
+- `OPENAI_MODEL` optional, defaults to `gpt-4.1-mini`
+- `OPENAI_VISION_MODEL` optional, defaults to `OPENAI_MODEL` or `gpt-4.1-mini`
 - `SUPABASE_URL`
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `CURION_MAPPING_MAX_DISTANCE` optional, defaults to `0.42`

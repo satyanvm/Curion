@@ -12,6 +12,7 @@ import {
   supabaseSelectRows
 } from "../_lib/semantic-profile.js";
 import { generateJsonWithGemini, isGeminiConfigured } from "../_lib/gemini.js";
+import { generateJsonWithOpenAI, isOpenAiConfigured } from "../_lib/openai.js";
 
 const DEFAULT_MATCH_COUNT = 5;
 const DEFAULT_MAX_DISTANCE = 0.42;
@@ -80,6 +81,35 @@ function buildProfileAtomOptions(atoms, limit = 60) {
   }));
 }
 
+function llmApiKeyFromBody(body) {
+  return String(body?.llmApiKey || "").trim() || undefined;
+}
+
+function isLlmConfigured(body) {
+  return isOpenAiConfigured(llmApiKeyFromBody(body)) || isGeminiConfigured();
+}
+
+async function generateJsonWithConfiguredLlm(
+  body,
+  systemInstruction,
+  payload,
+  options: { imageDataUrl?: string } = {}
+) {
+  const apiKey = llmApiKeyFromBody(body);
+  if (isOpenAiConfigured(apiKey)) {
+    return generateJsonWithOpenAI(systemInstruction, payload, {
+      apiKey,
+      imageDataUrl: options.imageDataUrl
+    });
+  }
+
+  if (isGeminiConfigured() && !options.imageDataUrl) {
+    return generateJsonWithGemini(systemInstruction, payload);
+  }
+
+  throw new Error(options.imageDataUrl ? "No vision-capable LLM provider is configured" : "No LLM provider is configured");
+}
+
 function resolveAtomChoice(choice, atoms) {
   const normalizedChoice = normalizeChoice(choice);
   if (!normalizedChoice) return null;
@@ -105,7 +135,7 @@ function mappingFromAtom(field, atom, confidence = LLM_MAPPING_CONFIDENCE) {
     value: atom.rawValue,
     confidence: clamp(confidence),
     method: "llm",
-    reasons: [`Gemini resolved the field to stored profile atom ${atom.semanticPath}`],
+    reasons: [`LLM resolved the field to stored profile atom ${atom.semanticPath}`],
     reviewRequired: confidence < 0.8
   };
 }
@@ -185,7 +215,7 @@ function buildLlmResolutionPrompt(body, fields, mappings, profileAtoms, sourceLa
 }
 
 async function applyLlmFallback(body, fields, mappings, source, userId, extractionReport, warnings) {
-  if (!isGeminiConfigured()) {
+  if (!isLlmConfigured(body)) {
     return { mappings, source, warnings };
   }
 
@@ -205,7 +235,8 @@ async function applyLlmFallback(body, fields, mappings, source, userId, extracti
   const prompt = buildLlmResolutionPrompt(body, fields, mappings, profileAtoms, source);
 
   try {
-    const content = await generateJsonWithGemini(
+    const content = await generateJsonWithConfiguredLlm(
+      body,
       [
         "You resolve low-confidence HTML form fields using stored profile atoms.",
         "Return strict JSON where each key is an exact unresolved field label and each value is the exact semanticPath of the best matching profile atom.",
@@ -219,7 +250,7 @@ async function applyLlmFallback(body, fields, mappings, source, userId, extracti
 
     const parsed = JSON.parse(content) as Record<string, string>;
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-      throw new Error("Gemini response was not a JSON object");
+      throw new Error("LLM response was not a JSON object");
     }
 
     const byLabel = new Map<string, (typeof mappings)[number]>(mappings.map((entry) => [entry.field.label, entry]));
@@ -233,14 +264,14 @@ async function applyLlmFallback(body, fields, mappings, source, userId, extracti
       entry.mapping = mapping;
     }
 
-    warnings.push("Gemini resolved low-confidence fields using stored profile atoms");
+    warnings.push("LLM resolved low-confidence fields using stored profile atoms");
     return {
       mappings,
       source: `${source}+llm`,
       warnings
     };
   } catch (error) {
-    warnings.push(`Gemini fallback failed: ${error instanceof Error ? error.message : "unknown error"}`);
+    warnings.push(`LLM fallback failed: ${error instanceof Error ? error.message : "unknown error"}`);
     return { mappings, source, warnings };
   }
 }
@@ -355,8 +386,8 @@ async function applyLlmExtractionFallback(body, fields, extractionReport, warnin
     return { fields, extractionReport, usedLlmExtraction: false };
   }
 
-  if (!isGeminiConfigured()) {
-    warnings.push("Extraction confidence was low, but Gemini is not configured for extraction repair");
+  if (!isLlmConfigured(body)) {
+    warnings.push("Extraction confidence was low, but no LLM provider is configured for extraction repair");
     return { fields, extractionReport, usedLlmExtraction: false };
   }
 
@@ -366,23 +397,27 @@ async function applyLlmExtractionFallback(body, fields, extractionReport, warnin
   }
 
   try {
-    const content = await generateJsonWithGemini(
+    const hasVisionInput = Boolean(body?.screenshotDataUrl && isOpenAiConfigured(llmApiKeyFromBody(body)));
+    const content = await generateJsonWithConfiguredLlm(
+      body,
       [
         "Repair low-confidence HTML form field extraction for Curion.",
         "Return strict JSON with a top-level fields array only.",
         "Each field must describe an existing fillable input, textarea, or select element in the provided HTML.",
         "Use stable CSS selectors from existing id, name, aria, placeholder, or structural attributes.",
+        hasVisionInput ? "Use the screenshot to read labels that are visible but not semantically exposed in HTML." : "",
         "Do not include hidden, disabled, password, file, submit, reset, image, or search controls.",
         "Preserve current fields when they are valid, repair unclear labels, and add missing fillable controls.",
         "Do not invent controls that are not present in the HTML."
-      ].join(" "),
-      buildLlmExtractionPrompt(body, fields, extractionReport)
+      ].filter(Boolean).join(" "),
+      buildLlmExtractionPrompt(body, fields, extractionReport),
+      hasVisionInput ? { imageDataUrl: body.screenshotDataUrl } : {}
     );
 
     const parsed = JSON.parse(content) as { fields?: any[] };
     const llmFields = parseLlmExtractedFields(parsed?.fields);
     if (llmFields.length === 0) {
-      warnings.push("Gemini extraction repair returned no usable fields");
+      warnings.push("LLM extraction repair returned no usable fields");
       return { fields, extractionReport, usedLlmExtraction: false };
     }
 
@@ -392,12 +427,12 @@ async function applyLlmExtractionFallback(body, fields, extractionReport, warnin
       ? { ...repairedReport, reviewRequired: true }
       : repairedReport;
     warnings.push(
-      `Gemini repaired extraction after confidence ${extractionReport.overallScore.toFixed(2)} fell below ${EXTRACTION_CONFIDENCE_THRESHOLD.toFixed(2)}`
+      `LLM repaired extraction after confidence ${extractionReport.overallScore.toFixed(2)} fell below ${EXTRACTION_CONFIDENCE_THRESHOLD.toFixed(2)}`
     );
 
     if (repairedReport.overallScore < EXTRACTION_CONFIDENCE_THRESHOLD) {
       warnings.push(
-        `Extraction confidence remained ${repairedReport.overallScore.toFixed(2)} after Gemini repair; review is required`
+        `Extraction confidence remained ${repairedReport.overallScore.toFixed(2)} after LLM repair; review is required`
       );
     }
 
@@ -407,7 +442,7 @@ async function applyLlmExtractionFallback(body, fields, extractionReport, warnin
       usedLlmExtraction: true
     };
   } catch (error) {
-    warnings.push(`Gemini extraction repair failed: ${error instanceof Error ? error.message : "unknown error"}`);
+    warnings.push(`LLM extraction repair failed: ${error instanceof Error ? error.message : "unknown error"}`);
     return { fields, extractionReport, usedLlmExtraction: false };
   }
 }
@@ -678,6 +713,14 @@ function mappingsFromMatches(fields, matches, extractionReport) {
   });
 }
 
+function emptyMappings(fields) {
+  return fields.map((field) => ({
+    field,
+    mapping: null,
+    candidates: []
+  }));
+}
+
 async function mapWithStoredProfile({ userId, embeddings }) {
   const maxDistance = Number(process.env.CURION_MAPPING_MAX_DISTANCE || DEFAULT_MAX_DISTANCE);
   const matchCount = Number(process.env.CURION_MAPPING_MATCH_COUNT || DEFAULT_MATCH_COUNT);
@@ -848,29 +891,41 @@ export default async function handler(request, response) {
       return;
     }
 
-    const fieldTexts = fields.map((field) => embeddingTextForField(field, body));
-    const fieldEmbeddings = await batchEmbedTexts(fieldTexts, "RETRIEVAL_QUERY");
     let mappings;
     let source;
 
-    if (userId) {
-      const matches = await mapWithStoredProfile({
-        userId,
-        embeddings: fieldEmbeddings
-      });
-      mappings = mappingsFromMatches(fields, matches, extractionReport);
-      source = `semantic-vector${extractionSourceSuffix}`;
-    } else if (body.profile && typeof body.profile === "object" && !Array.isArray(body.profile)) {
-      mappings = await mapWithTransientProfile({
-        fields,
-        fieldEmbeddings,
-        profile: body.profile,
-        extractionReport
-      });
-      source = `semantic-vector-transient-profile${extractionSourceSuffix}`;
-      warnings.push("No userId was supplied; mapped against transient profile payload instead of Supabase atoms");
-    } else {
-      throw new Error("userId is required unless a transient profile object is supplied");
+    try {
+      const fieldTexts = fields.map((field) => embeddingTextForField(field, body));
+      const fieldEmbeddings = await batchEmbedTexts(fieldTexts, "RETRIEVAL_QUERY");
+
+      if (userId) {
+        const matches = await mapWithStoredProfile({
+          userId,
+          embeddings: fieldEmbeddings
+        });
+        mappings = mappingsFromMatches(fields, matches, extractionReport);
+        source = `semantic-vector${extractionSourceSuffix}`;
+      } else if (body.profile && typeof body.profile === "object" && !Array.isArray(body.profile)) {
+        mappings = await mapWithTransientProfile({
+          fields,
+          fieldEmbeddings,
+          profile: body.profile,
+          extractionReport
+        });
+        source = `semantic-vector-transient-profile${extractionSourceSuffix}`;
+        warnings.push("No userId was supplied; mapped against transient profile payload instead of Supabase atoms");
+      } else {
+        throw new Error("userId is required unless a transient profile object is supplied");
+      }
+    } catch (error) {
+      if (!isLlmConfigured(body)) {
+        throw error;
+      }
+      mappings = emptyMappings(fields);
+      source = `llm-only${extractionSourceSuffix}`;
+      warnings.push(
+        `Semantic mapping was skipped or failed before LLM fallback: ${error instanceof Error ? error.message : "unknown error"}`
+      );
     }
 
     const llmResult = await applyLlmFallback(

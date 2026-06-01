@@ -7,7 +7,10 @@
     "demo": "ts-node src/index.ts demo",
     "demo:crm": "ts-node src/index.ts crm data/crm-profile.json",
     "test:crm": "ts-node src/scenarios/runCrmScenario.ts",
-    "demo:llm-crm": "ts-node src/scenarios/runLlmCrmScenario.ts"
+    "demo:llm-crm": "ts-node src/scenarios/runLlmCrmScenario.ts",
+    "test:generated": "ts-node src/scenarios/runGeneratedFormScenarios.ts",
+    "test:generated:headed": "ts-node src/scenarios/runGeneratedFormScenarios.ts --headed",
+    "test:generated:inspect": "ts-node src/scenarios/runGeneratedFormScenarios.ts --inspect-form"
   },
   "dependencies": {
     "dotenv": "^16.5.0",

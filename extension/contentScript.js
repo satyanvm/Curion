@@ -48,6 +48,7 @@
      *   curionWorkingMetadata?: Dict;
      *   curionProfile?: Dict;
      *   curionUserId?: string;
+     *   curionOpenAiApiKey?: string;
      *   curionUseBackendProfile?: boolean;
      *   curionSubmitMode?: string;
      *   curionAutoFillEnabled?: boolean;
@@ -320,6 +321,10 @@
         else {
             return null;
         }
+        if (settings?.curionOpenAiApiKey) {
+            requestBody.llmProvider = "openai";
+            requestBody.llmApiKey = String(settings.curionOpenAiApiKey || "").trim();
+        }
         const response = await fetch(DEFAULT_API_URL, {
             method: "POST",
             body: JSON.stringify(requestBody)
@@ -435,6 +440,7 @@
             "curionWorkingMetadata",
             "curionMetadataSource",
             "curionUserId",
+            "curionOpenAiApiKey",
             "curionUseBackendProfile",
             "curionSubmitMode"
         ]);

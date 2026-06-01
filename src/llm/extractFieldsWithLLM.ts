@@ -2,9 +2,22 @@ import { Page } from "playwright";
 import { FormField } from "../types/types";
 import { parseLlmExtractedFields } from "./fieldParsing";
 import { generateJsonWithGemini, isGeminiConfigured } from "./gemini";
+import { generateJsonWithOpenAI, isOpenAiConfigured } from "./openai";
+
+async function generateFieldExtractionJson(systemInstruction: string, payload: unknown): Promise<string> {
+  if (isOpenAiConfigured()) {
+    return generateJsonWithOpenAI(systemInstruction, payload);
+  }
+
+  if (isGeminiConfigured()) {
+    return generateJsonWithGemini(systemInstruction, payload);
+  }
+
+  throw new Error("No LLM provider is configured for field extraction");
+}
 
 export async function extractFieldsWithLLM(page: Page): Promise<FormField[]> {
-  if (!isGeminiConfigured()) {
+  if (!isOpenAiConfigured() && !isGeminiConfigured()) {
     return [];
   }
 
@@ -12,7 +25,7 @@ export async function extractFieldsWithLLM(page: Page): Promise<FormField[]> {
   const htmlSnippet = html.slice(0, 25000);
 
   try {
-    const content = await generateJsonWithGemini(
+    const content = await generateFieldExtractionJson(
       "Extract likely fillable form fields from the provided HTML. Return strict JSON with a top-level 'fields' array. Each field must include label, selector, and type. Prefer selectors that use existing ids or names from the HTML. Only include input, textarea, and select elements that a user would fill.",
       {
         url: page.url(),

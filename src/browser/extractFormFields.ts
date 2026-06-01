@@ -4,11 +4,12 @@ import { calculateExtractionConfidence } from "../confidence/extractionConfidenc
 import { calculateHtmlAdequacy } from "../confidence/htmlAdequacy";
 import { repairDomFields } from "./repairDomFields";
 import { extractFieldsWithLLM } from "../llm/extractFieldsWithLLM";
+import { extractFieldsWithVision } from "../llm/extractFieldsWithVision";
 import { ExtractionConfidenceReport, FormField, HtmlAdequacyReport } from "../types/types";
 
 export interface ExtractedFieldSet {
   fields: FormField[];
-  extractionSource: "dom" | "dom+llm" | "dom-needs-vision" | "dom+llm-deferred";
+  extractionSource: "dom" | "dom+llm" | "dom+vision" | "dom-needs-vision" | "dom+llm-deferred";
   report: ExtractionConfidenceReport;
   htmlAdequacyReport: HtmlAdequacyReport;
   /** When true, extraction LLM was skipped so mapping can run one unified LLM call. */
@@ -66,6 +67,21 @@ export async function extractFormFields(page: Page): Promise<ExtractedFieldSet> 
   }
 
   if (htmlAdequacyReport.recommendedFallback === "vision") {
+    const visionFields = await extractFieldsWithVision(page, domFields);
+    if (visionFields.length > 0) {
+      const mergedFields = mergeFields(domFields, visionFields);
+      const mergedReport = calculateExtractionConfidence(mergedFields);
+      const mergedAdequacyReport = await calculateHtmlAdequacy(page, mergedFields, mergedReport);
+
+      return {
+        fields: mergedFields,
+        extractionSource: "dom+vision",
+        report: mergedReport,
+        htmlAdequacyReport: mergedAdequacyReport,
+        deferredLlmExtraction: false,
+      };
+    }
+
     return {
       fields: domFields,
       extractionSource: "dom-needs-vision",
