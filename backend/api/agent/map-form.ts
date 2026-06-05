@@ -21,6 +21,8 @@ const LLM_EXTRACTION_HTML_LIMIT = 25000;
 const EXTRACTION_CONFIDENCE_THRESHOLD = 0.68;
 const LLM_MAPPING_CONFIDENCE = 0.78;
 const LLM_EXTRACTED_FIELD_LIMIT = 120;
+const SEMANTIC_REVIEW_CONFIDENCE_THRESHOLD = 0.68;
+const SEMANTIC_REVIEW_GAP_THRESHOLD = 0.035;
 
 const PROFILE_SCHEMA = {
   firstName: "A person's first or given name.",
@@ -701,7 +703,9 @@ function mappingsFromMatches(fields, matches, extractionReport) {
             confidence: best.confidence,
             method: "semantic-vector",
             reasons: [`Nearest semantic profile atom is ${best.semantic_path}`],
-            reviewRequired: best.confidence < 0.78 || (runnerUp && gap < 0.05)
+            reviewRequired:
+              best.confidence < SEMANTIC_REVIEW_CONFIDENCE_THRESHOLD ||
+              Boolean(runnerUp && gap < SEMANTIC_REVIEW_GAP_THRESHOLD)
           }
         : null,
       candidates: candidates.slice(0, 3).map((candidate) => ({
@@ -792,7 +796,7 @@ function buildMappingConfidenceReport(mappings, extractionReport) {
     }
 
     const score = clamp(entry.mapping.confidence * 0.72 + extractionScore * 0.28);
-    const shouldUseLLM = score < 0.75 || entry.mapping.reviewRequired;
+    const shouldUseLLM = Boolean(entry.mapping.reviewRequired);
 
     return {
       label: entry.field.label,
